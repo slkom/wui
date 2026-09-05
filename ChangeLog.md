@@ -1,14 +1,20 @@
-# 1.3.260327
+# 1.3.260401
+1. Fixes by S.K.
+
+#1.3.260327
 1. Merged fixes by S.K.
 2. Fix input behavior
 
 # 1.3.260215
+
 1. Changed maintainer to Intent Garden. Code cleanup. Input fix. (I-74)
 
 # 1.3.251114
+
 1. Restore v143 build, because v145 does not work on Windows 7 (TSKW24-9.1)
 
 # 1.3.251113
+
 1. Fix the window context is missing in the window_created event on Windows (TSKW24-8)
 2. Fixed positioning the transient windows (TSKW24-8)
 3. Fix menu::update_theme() (TSKW24-8.1)
