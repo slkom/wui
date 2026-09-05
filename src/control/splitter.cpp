@@ -23,9 +23,7 @@ namespace wui
     margin_min(-1), margin_max(-1),
     tcn(theme_control_name),
     theme_(theme__),
-     position_{ 0 },
-    parent_(),
-    my_control_sid(), my_plain_sid(),
+    position_{ },
     showed_(true), enabled_(true), active(false), topmost_(false),
     prev_pos{0}
 {
@@ -73,32 +71,22 @@ void splitter::receive_control_events(const event& ev)
                 cursor__ = cursor::size_ns;
             }
 
-            if (cursor__ != cursor_)
+            auto parent__ = parent_.lock();
+            if (parent__)
             {
-                auto parent__ = parent_.lock();
-                if (parent__)
-                {
-                    cursor_ = cursor__;
-                    set_cursor(parent__->context(), cursor__);
-                }
+                set_cursor(parent__->context(), cursor__);
             }
         }
         break;
         case mouse_event_type::leave:
-        {
             if (!active)
             {
-                if (cursor::default_ != cursor_)
+                auto parent__ = parent_.lock();
+                if (parent__)
                 {
-                    auto parent__ = parent_.lock();
-                    if (parent__)
-                    {
-                        cursor_ = cursor::default_;
-                        set_cursor(parent__->context(), cursor::default_);
-                    }
+                    set_cursor(parent__->context(), cursor::default_);
                 }
             }
-        }
         break;
         case mouse_event_type::left_down:
             active = true;
@@ -128,7 +116,7 @@ void splitter::receive_plain_events(const event& ev)
 
                 auto parent__ = parent_.lock();
 
-                if (parent__ && !parent__->parent().expired()) 
+                if (parent__ && !parent__->parent().expired())
                 {
                     const auto pp = parent__->position();
                     pos.left -= pp.left;
@@ -179,6 +167,7 @@ void splitter::receive_plain_events(const event& ev)
             if (callback)
             {
                 callback(pos.left, pos.top);
+                //TODO: callback(pos, prev_pos);
                 prev_pos = pos;
             }
         }
@@ -189,19 +178,12 @@ void splitter::receive_plain_events(const event& ev)
                 active = false;
                 redraw();
 
-                if (cursor::default_ != cursor_)
-                {
-                    if (!position().in(ev.mouse_event_.x, ev.mouse_event_.y))
-                    {
-                        auto parent__ = parent_.lock();
-                        if (parent__)
-                        {
-                            cursor_ = cursor::default_;
-                            set_cursor(parent__->context(), cursor::default_);
-                        }
-                    }
-                }
+            auto parent__ = parent_.lock();
+            if (parent__)
+            {
+                set_cursor(parent__->context(), cursor::default_);
             }
+        }
         break;
     }
 }
