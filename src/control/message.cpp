@@ -102,10 +102,10 @@ void message::show(std::string_view message__,
     // else dialog window is root [graphic not initialized]
 
     window_->subscribe(
-        [this](const wui::event& e) {
-            if (e.type & wui::event_type::internal) {
+        [this](const event& e) {
+            if (e.type & event_type::internal) {
                 switch (e.internal_event_.type) {
-                    case wui::internal_event_type::window_created:
+                    case internal_event_type::window_created:
                     {
                         const rect tw_pos = transient_window_->position();
                         if (!ctrl_pos_inited_)
@@ -124,11 +124,8 @@ void message::show(std::string_view message__,
             }
         }, wui::event_type::internal);
 
-    constexpr window_style dialog_top = window_style::title_showed | window_style::topmost
-        | window_style::close_button | window_style::moving | window_style::border_all;
-
     window_->init(title_, { 0, 0, width_, height_ },
-                  docked_ ? window_style::dialog : dialog_top, [this]() {
+                  docked_ ? window_style::dialog : window_style::dialog_topmost, [this]() {
             if (result_callback)
             {
                 result_callback(result_);
@@ -270,7 +267,7 @@ void message::calc_ctrl_position(int32_t& width_, int32_t& height_)
 void message::add_controls()
 {
     window_->add_control(icon, icon_position_);
-
+    auto button = button0;
     switch (button_) {
         case message_button::ok:
         {
@@ -289,7 +286,7 @@ void message::add_controls()
                     btn0_caption = "retry", btn1_caption = "cancel";
                     break;
             }
-
+            button = button1;
             button0->set_caption(locale("button", btn0_caption));
             window_->add_control(button0, button0_position_);
 
@@ -319,7 +316,7 @@ void message::add_controls()
     }
 
     window_->add_control(text_, text_position_);
-    window_->set_focused(button0);
+    window_->set_focused(button);
 }
 
 }
