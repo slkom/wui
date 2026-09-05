@@ -41,10 +41,11 @@
       "border": "#00a0d2",
       "border_width": 1,
       "focused_border": "#dcd2dc",
+      "hover_border": "#50535e",
       "text": "#f0f1f1",
-      "disabled": "#a5a5a0",
+      "disabled": "#5e5e5e",
       "anchor": "#0066cc",
-      "round": 0,
+      "round": 5,
       "focusing": 1,
       "font": {
         "name": "Segoe UI",
