@@ -31,7 +31,7 @@ namespace wui
 {
 
 #ifdef __linux__
-static xcb_visualtype_t *default_visual_type(wui::system_context &context_)
+static xcb_visualtype_t *default_visual_type(system_context &context_)
 {
     auto depth_iter = xcb_screen_allowed_depths_iterator(context_.screen);
     for (; depth_iter.rem; xcb_depth_next(&depth_iter))
@@ -215,9 +215,9 @@ void graphic::clear(const rect& position)
 #elif __linux__
     auto cr = cairo_create(surface);
 
-    cairo_set_source_rgb(cr, static_cast<double>(wui::get_red(background_color)) / 255,
-        static_cast<double>(wui::get_green(background_color)) / 255,
-        static_cast<double>(wui::get_blue(background_color)) / 255);
+    cairo_set_source_rgb(cr, static_cast<double>(get_red(background_color)) / 255,
+        static_cast<double>(get_green(background_color)) / 255,
+        static_cast<double>(get_blue(background_color)) / 255);
     if (!position.is_null())
         cairo_rectangle(cr, position.left, position.top, position.width(), position.height());
     else
@@ -304,6 +304,57 @@ void graphic::draw_line(const rect& position, const color color_, const int32_t 
 #endif
 }
 
+
+int32_t graphic::get_font_ideal_height(const font& font__)
+{
+    if (!inited())
+    {
+        return font__.size;
+    }
+
+#ifdef _WIN32
+    auto old_font = (HFONT)SelectObject(mem_dc, pc.get_font(font__));
+    TEXTMETRIC tm;
+    if (!GetTextMetrics(mem_dc, &tm))
+    {
+        return font__.size;
+    }
+
+    SelectObject(mem_dc, old_font);
+
+    return tm.tmHeight + tm.tmExternalLeading;
+
+#elif __linux__
+    auto cr = pc.get_font(font__, surface);
+    if (!cr)
+    {
+        err.set(error_type::no_handle, "graphic::measure_text()", "No cairo font context");
+        return font__.size;
+    }
+
+    cairo_font_extents_t fe;
+    cairo_font_extents(cr, &fe);
+    return static_cast<int32_t>(std::ceil(fe.height));
+#endif
+}
+
+#ifdef _WIN32
+int32_t graphic::get_font_ideal_height_gdiplus(const font& font__)
+{
+    if (!inited())
+    {
+        return font__.size;
+    }
+
+    auto old_font = (HFONT)SelectObject(mem_dc, pc.get_font(font__));
+    Gdiplus::Graphics g(mem_dc);
+    Gdiplus::Font font(mem_dc);
+    const Gdiplus::REAL lineSpacing = font.GetHeight(&g);
+    SelectObject(mem_dc, old_font);
+    return static_cast<int32_t>(std::ceil(lineSpacing));
+}
+#endif
+
 rect graphic::measure_text(std::string_view text_, const font &font__)
 {
     if (text_.empty() || !inited())
@@ -332,11 +383,11 @@ rect graphic::measure_text(std::string_view text_, const font &font__)
     if (!cr)
     {
         err.set(error_type::no_handle, "graphic::measure_text()", "No cairo font context");
-        return rect{ };
+        return { 0, 0, 0, font__.size };
     }
 
-    cairo_text_extents_t dot_extents, extents;   // It's a workaround 'magic'
-    cairo_text_extents(cr, ".", &dot_extents);   // to work the spaces
+    cairo_text_extents_t dot_te, te;   // It's a workaround 'magic'
+    cairo_text_extents(cr, ".", &dot_te);   // to work the spaces
     if (CAIRO_STATUS_SUCCESS != cairo_status(cr))
     {
         return { 0, 0, 0, font__.size };
@@ -344,15 +395,17 @@ rect graphic::measure_text(std::string_view text_, const font &font__)
 
     std::string s; s.reserve(text_.size() + 2);  //
     s = '.' + std::string(text_) + '.';          // =)
-    cairo_text_extents(cr, s.c_str(), &extents);
+    cairo_text_extents(cr, s.c_str(), &te);
     if(CAIRO_STATUS_SUCCESS != cairo_status(cr))
     {
         return { 0, 0, 0, font__.size };
     }
-
+    cairo_font_extents_t fe;
+    cairo_font_extents(cr, &fe);
     return { 0, 0,
-        static_cast<int32_t>(ceil(extents.width - (dot_extents.width * 3))),
-        static_cast<int32_t>(ceil(extents.height)) };
+        static_cast<int32_t>(ceil(te.width - (dot_te.width * 3))),
+//        static_cast<int32_t>(ceil(te.height)) }; // bad if "-", "+" text
+        static_cast<int32_t>(ceil(fe.ascent + fe.descent)) };
 #endif
 }
 
@@ -430,18 +483,38 @@ void graphic::draw_text(const rect &position, std::string_view text_, const colo
     }
 
     cairo_set_source_rgb(cr,
-        static_cast<double>(wui::get_red(color_)) / 255,
-        static_cast<double>(wui::get_green(color_)) / 255,
-        static_cast<double>(wui::get_blue(color_)) / 255
-        //, static_cast<double>(wui::get_alpha(color_)) / 255 // rgba
+        static_cast<double>(get_red(color_)) / 255,
+        static_cast<double>(get_green(color_)) / 255,
+        static_cast<double>(get_blue(color_)) / 255
     );
 
-    cairo_move_to(cr, position.left, position.top + font__.size * 5.0 / 6.0);
+    const auto top = position.top + font__.size * 5.0 / 6.0;
+    cairo_move_to(cr, position.left, top);
 
     std::string text__(text_); /// Workaround to prevent crashes
     text__ += '\0';
 
     cairo_show_text(cr, text__.c_str());
+
+    if (decorations::underline & font__.decorations_)
+    {
+        cairo_text_extents_t te;
+        cairo_text_extents(cr, text__.c_str(), &te);
+
+        cairo_font_extents_t fe;
+        cairo_font_extents(cr, &fe);
+
+        double line_thickness = 1.0;
+        if (fe.height > 15.0)
+        {
+            line_thickness = fe.height / 15.0;
+        }
+        cairo_set_line_width(cr, line_thickness);
+        const double y_offset = fe.descent / 2.0;
+        cairo_move_to(cr, position.left + te.x_bearing, top + y_offset);
+        cairo_line_to(cr, position.left + te.x_bearing + te.x_advance, top + y_offset);
+        cairo_stroke(cr);
+    }
 #endif
 }
 
@@ -519,10 +592,10 @@ void graphic::draw_text_clip(const rect & position, const text_lines_t & lines,
     }
 
     cairo_set_source_rgba(cr,
-        static_cast<double>(wui::get_red(color_)) / 255,
-        static_cast<double>(wui::get_green(color_)) / 255,
-        static_cast<double>(wui::get_blue(color_)) / 255,
-        static_cast<double>(wui::get_alpha(color_)) / 255);
+        static_cast<double>(get_red(color_)) / 255,
+        static_cast<double>(get_green(color_)) / 255,
+        static_cast<double>(get_blue(color_)) / 255,
+        static_cast<double>(get_alpha(color_)) / 255);
 
     if (clip_)
     {
@@ -533,7 +606,8 @@ void graphic::draw_text_clip(const rect & position, const text_lines_t & lines,
     std::string text;
     for (auto& line : lines)
     {
-        cairo_move_to(cr, position.left + line.rc.left, position.top + line.rc.top + font__.size * 5.0 / 6.0);
+        cairo_move_to(cr, position.left + line.rc.left,
+            position.top + line.rc.top + font__.size * 5.0 / 6.0);
         text = line.str; /// Workaround to prevent crashes
         text += '\0';
 
@@ -584,16 +658,18 @@ void graphic::draw_rect(const rect& position, const color fill_color)
 
 #ifdef _WIN32
 static void DrawRoundBox(HDC dc, const rect &pos_, const int32_t radius_,
-    const int32_t borderWidth, const color background, const color border)
+    int32_t borderWidth, const color background, const color border)
 {
-    Gdiplus::Graphics g(dc);
-
-    // Make the path
-    const int32_t shift1 = (borderWidth > 0 ? -borderWidth : borderWidth)/2;
-    const int32_t shift2 = static_cast<int32_t>(round((borderWidth > 0 ? borderWidth : -borderWidth)/2.0));
+    if (borderWidth < 0)
+    {
+        borderWidth = -borderWidth;
+    }
+    const int32_t shift1 = -borderWidth / 2;
+    const int32_t shift2 = static_cast<int32_t>(std::round(borderWidth / 2.0));
     const rect pos{ pos_.left - shift1, pos_.top - shift1,
         pos_.right - shift2, pos_.bottom - shift2 };
 
+    Gdiplus::Graphics g(dc);
     Gdiplus::GraphicsPath path;
     if (radius_)
     {
@@ -641,14 +717,14 @@ static void DrawRoundBox(HDC dc, const rect &pos_, const int32_t radius_,
                 get_green(border),
                 get_blue(border)
             ),
-            1.0f * (borderWidth > 0 ? borderWidth : -borderWidth));
+            1.0f * borderWidth);
         g.DrawPath(&pen, &path);
     }
 }
 #endif
 
 void graphic::draw_rect(const rect& position, const color border_color,
-    const color fill_color, const uint32_t border_width, const uint32_t rnd)
+    const color fill_color, const int32_t border_width, const int32_t rnd)
 {
 #ifdef _WIN32
     DrawRoundBox(mem_dc, position, rnd, border_width, fill_color, border_color);
@@ -904,6 +980,27 @@ bool graphic::is_me_text_measurer(const graphic& gr) noexcept
 #endif
 }
 
+int32_t get_font_ideal_height(const font& font_, graphic* gr)
+{
+    gr = (gr && gr->inited()) ? gr : (tm_graphic && tm_graphic->inited()) ? tm_graphic : nullptr;
+    if (!gr)
+    {
+        return font_.size;
+    }
+    return gr->get_font_ideal_height(font_);
+}
+
+#ifdef _WIN32
+int32_t get_font_ideal_height_gdiplus(const font& font_, graphic* gr)
+{
+    gr = (gr && gr->inited()) ? gr : (tm_graphic && tm_graphic->inited()) ? tm_graphic : nullptr;
+    if (!gr)
+    {
+        return font_.size;
+    }
+    return gr->get_font_ideal_height_gdiplus(font_);
+}
+#endif
 
 static std::unordered_map<std::string, std::pair<int32_t, int32_t>> tm_cache;
 
