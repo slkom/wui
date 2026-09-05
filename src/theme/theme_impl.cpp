@@ -24,7 +24,7 @@ namespace wui
 {
 
 theme_impl::theme_impl(std::string_view name_)
-    : name(name_), ints(), strings(), fonts(), imgs(), dummy_string(), dummy_image()
+    : name(name_)
 {
 }
 
@@ -33,9 +33,9 @@ std::string theme_impl::get_name() const
     return name;
 }
 
-void theme_impl::set_name(std::string_view name__)
+void theme_impl::set_name(std::string_view name_)
 {
-    name = name__;
+    name = name_;
 }
 
 void theme_impl::set_color(std::string_view control, std::string_view value, color color_)
@@ -134,8 +134,8 @@ void theme_impl::load_resource(int32_t resource_index, std::string_view resource
     {
         return;
     }
-
-    const void* resource_data = ::LockResource(::LoadResource(h_inst, h_resource));
+    auto h = ::LoadResource(h_inst, h_resource);
+    const void* resource_data = h ? ::LockResource(h) : nullptr;
     if (!resource_data)
     {
         return;
@@ -149,6 +149,7 @@ void theme_impl::load_json(std::string_view json_)
 {
     err.reset();
 
+    //TODO: make code for trow exception error
     try
     {
         auto j = nlohmann::json::parse(json_);
@@ -301,7 +302,7 @@ void theme_impl::load_file(std::string_view file_name)
 {
     err.reset();
 
-    std::ifstream f(wui::real_path(file_name));
+    std::ifstream f(std::move(wui::real_path(file_name)));
 
     if (!f)
     {
