@@ -75,11 +75,8 @@ menu::menu(std::string_view theme_control_name, std::shared_ptr<i_theme> theme__
     tcn(theme_control_name),
     theme_(theme__),
     position_{ 0 },
-    parent_(),
-    my_subscriber_id(),
     activation_control(),
     indent(0), x(-1), y(-1),
-    items(),
     max_text_width(0), max_hotkey_width(0),
     item_height_(32),
     showed_(false),
@@ -110,6 +107,11 @@ void menu::draw(graphic &, const rect&)
 
 void menu::set_position(const rect& position__)
 {
+    if (showed_)
+    {
+        hide();
+    }
+
     list_->set_position(position__);
 }
 
@@ -282,6 +284,7 @@ void menu::enable()
 
 void menu::disable()
 {
+    list_->hide();
     list_->disable();
 }
 
@@ -302,6 +305,7 @@ static void make_items(menu_items_t& items__, const menu_items_t_& items_)
 
 void menu::set_items(const menu_items_t_ &items_)
 {
+    list_->hide();
     make_items(items, items_);
     list_->set_item_count(calc_items_count(items));
     size_updated = false;
@@ -309,6 +313,7 @@ void menu::set_items(const menu_items_t_ &items_)
 
 void menu::update_item(const menu_item &mi)
 {
+    list_->hide();
     auto it = std::find(items.begin(), items.end(), mi.id);
     if (it != items.end())
     {
@@ -319,6 +324,7 @@ void menu::update_item(const menu_item &mi)
 
 void menu::swap_items(int32_t first_item_id, int32_t second_item_id)
 {
+    list_->hide();
     auto first_it = std::find(items.begin(), items.end(), first_item_id);
     if (first_it != items.end())
     {
@@ -333,6 +339,7 @@ void menu::swap_items(int32_t first_item_id, int32_t second_item_id)
 
 void menu::delete_item(int32_t id)
 {
+    list_->hide();
     auto it = std::find(items.begin(), items.end(), id);
     if (it != items.end())
     {
@@ -355,7 +362,7 @@ void menu::update_size()
         return;
     }
 
-    const auto font_ = theme_font(tcn, tv_font, theme_);
+    const auto font_ = std::move(theme_font(tcn, tv_font, theme_));
 
     max_text_width = 0, max_hotkey_width = 0;
 
@@ -452,9 +459,9 @@ void menu::draw_arrow_down(graphic &gr, const rect& pos, const bool expanded)
     constexpr int h = 4;
     int w = 8;
 
-    for (int j = 0; j != h; ++j)
+    for (int j = 0; j < h; ++j)
     {
-        for (int i = 0; i != w; ++i)
+        for (int i = 0; i < w; ++i)
         {
             gr.draw_pixel({ pos.left + j + i, pos.top + j }, color);
         }
@@ -462,7 +469,7 @@ void menu::draw_arrow_down(graphic &gr, const rect& pos, const bool expanded)
     }
 }
 
-void menu::draw_list_item(graphic &gr, const int32_t n_item, const rect& item_rect,
+void menu::draw_list_item(graphic& gr, const int32_t n_item, const rect& item_rect,
     const list::item_state state)
 {
     auto item = get_item(items, n_item);
@@ -471,20 +478,19 @@ void menu::draw_list_item(graphic &gr, const int32_t n_item, const rect& item_re
         return;
     }
 
-    const auto border_width = theme_dimension(tcn, tv_border_width);
-
     if (state == list::item_state::selected)
     {
-        gr.draw_rect({ item_rect.left, item_rect.top, item_rect.right, item_rect.bottom }, theme_color(tcn, tv_selected_item));
+        gr.draw_rect({ item_rect.left, item_rect.top, item_rect.right, item_rect.bottom },
+            theme_color(tcn, tv_selected_item));
     }
 
+    const auto height = item_rect.height();
     if (item->image_)
     {
-        const auto img_size = static_cast<int32_t>(item_rect.height() * 0.9);
+        const auto img_size = static_cast<int32_t>(height * 0.9);
 
-        const auto indent_ = static_cast<int32_t>((item_rect.height() - img_size) / 2);
-
-        rect img_rect = { item_rect.left + indent_,
+        const auto indent_ = (height - img_size) / 2;
+        const rect img_rect = { item_rect.left + indent_,
             item_rect.top + indent_,
             item_rect.left + img_size + indent_,
             item_rect.top + img_size + indent_ };
@@ -493,31 +499,36 @@ void menu::draw_list_item(graphic &gr, const int32_t n_item, const rect& item_re
         item->image_->draw(gr, { 0 });
     }
 
-    const auto text_color = item->state != menu_item_state::disabled ? theme_color(tcn, tv_text) : theme_color(tcn, tv_disabled_text);
-    const auto font = theme_font(tcn, tv_font);
+    const auto text_color = item->state != menu_item_state::disabled ?
+        theme_color(tcn, tv_text) : theme_color(tcn, tv_disabled_text);
+    const auto font_ = std::move(theme_font(tcn, tv_font));
 
-    const auto text_height = font.size;
+    const auto text_height = font_.size;
 
-    gr.draw_text({ item_rect.left + item_rect.height() + item_rect.height() * item->level, item_rect.top + (item_rect.height() - text_height) / 2 }, item->text, text_color, font);
+    gr.draw_text({ item_rect.left + height * (item->level + 1),
+        item_rect.top + (height - text_height) / 2 },
+        item->text, text_color, font_);
 
     if (!item->hotkey.empty())
     {
-        gr.draw_text({ item_rect.right - max_hotkey_width, item_rect.top + (item_rect.height() - text_height) / 2 }, item->hotkey, text_color, font);
+        gr.draw_text({ item_rect.right - max_hotkey_width - height / 2,
+            item_rect.top + (height - text_height) / 2 },
+            item->hotkey, text_color, font_);
     }
 
     if (!item->children.empty())
     {
-        const auto height = item_rect.height();
-
-        const auto left = item_rect.right - item_rect.height() + (height - 8) / 2,
-            top = item_rect.top + (height - 4) / 2;
+        const auto left = item_rect.right - height;
+        const auto top = item_rect.top + (height - 4) / 2;
 
         draw_arrow_down(gr, { left, top }, item->state == menu_item_state::expanded);
     }
 
-    if (item->state == menu_item_state::separator && item_rect.bottom <= list_->position().bottom - border_width)
+    if (item->state == menu_item_state::separator
+        && item_rect.bottom <= list_->position().bottom - theme_dimension(tcn, tv_border_width))
     {
-        gr.draw_line({ item_rect.left, item_rect.bottom - 1, item_rect.right, item_rect.bottom - 1 }, text_color);
+        gr.draw_line({ item_rect.left, item_rect.bottom - 1, item_rect.right,
+            item_rect.bottom - 1 }, theme_color(tcn, tv_border));
     }
 }
 

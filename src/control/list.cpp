@@ -193,6 +193,9 @@ void list::receive_control_events(const event &ev)
                     }
                     return;
                 }
+#if 0
+                // не стандартное поведение, обычно отклик по left_up
+                // NB: к тому же мешает определить событие!
                 else
                 {
                     update_selected_item(ev.mouse_event_.y);
@@ -203,6 +206,17 @@ void list::receive_control_events(const event &ev)
                     }
                 }
             break;
+#else
+            break;
+            case mouse_event_type::left_up:
+                update_selected_item(ev.mouse_event_.y);
+
+                if (item_click_callback)
+                {
+                    item_click_callback(click_button::left, selected_item_, ev.mouse_event_.x, ev.mouse_event_.y);
+                }
+            break;
+#endif
             case mouse_event_type::right_up:
                 if (ev.mouse_event_.y - position().top <= title_height)
                 {
@@ -239,6 +253,11 @@ void list::receive_control_events(const event &ev)
                 {
                     update_selected_item(ev.mouse_event_.y);
                 }
+                auto parent__ = parent_.lock();
+                if (parent__)
+                {
+                    set_cursor(parent__->context(), cursor::default_);
+                }
             }
             break;
             case mouse_event_type::wheel:
@@ -260,7 +279,8 @@ void list::receive_control_events(const event &ev)
                     vert_scroll->scroll_down();
                 }
             break;
-            default: break;
+            default:
+            break;
         }
     }
     else if (ev.type & event_type::keyboard)
@@ -538,7 +558,10 @@ void list::show()
     {
         showed_ = true;
 
-        vert_scroll->show();
+        if (has_scrollbar())
+        {
+            vert_scroll->show();
+        }
 
         redraw();
     }
@@ -882,11 +905,6 @@ void list::draw_items(graphic &gr_)
     }
 }
 
-bool list::has_scrollbar() const noexcept
-{
-    return scroll_area + position_.height() > position_.height();
-}
-
 void list::update_selected_item(int32_t y)
 {
     const auto scroll_pos = vert_scroll->get_scroll_pos();
@@ -910,19 +928,28 @@ void list::update_selected_item(int32_t y)
         item_end = height != -1 ? item_start + height : 0;
     }
 
-    if (item != selected_item_)
+    if (-1 != item && item != selected_item_)
     {
         const auto old_selected = selected_item_;
 
         selected_item_ = item < item_count ? item : -1;
 
-        redraw_item(old_selected);
-        redraw_item(selected_item_);
-
-        if (item_change_callback)
+        if (old_selected >= 0)
         {
-            item_change_callback(selected_item_);
+            redraw_item(old_selected);
         }
+
+        if (selected_item_ >= 0)
+        {
+            redraw_item(selected_item_);
+        }
+    }
+
+    // если item != selected_item_ необходимо вызвать item_change_callback()
+    // примером может быть реакция на изменение 2x input - simple.cpp: диалог по кнопке 'Edit'
+    if (-1 != item && selected_item_ >= 0 && item_change_callback)
+    {
+        item_change_callback(selected_item_);
     }
 }
 
@@ -961,7 +988,9 @@ void list::update_active_item(int32_t y)
 
 void list::update_scroll_area()
 {
-    scroll_area = title_height + get_item_top(item_count - 1) + get_item_height(item_count - 1) - position_.height();
+    scroll_area = title_height + get_item_top(item_count)
+        //+ theme_dimension(tcn, tv_border_width, theme_)
+        - position_.height();
     if (scroll_area < 0)
     {
         scroll_area = 0;

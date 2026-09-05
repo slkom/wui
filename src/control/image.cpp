@@ -162,9 +162,7 @@ namespace wui
 image::image(int32_t resource_index_, std::shared_ptr<i_theme> theme__)
     : theme_(theme__),
     position_{ 0 },
-    parent_(),
     showed_(true), topmost_(false),
-    file_name(),
     resource_index(resource_index_),
     img(nullptr)
 {
@@ -175,7 +173,6 @@ image::image(int32_t resource_index_, std::shared_ptr<i_theme> theme__)
 image::image(std::string_view file_name_, std::shared_ptr<i_theme> theme__)
     : theme_(theme__),
     position_{ 0 },
-    parent_(),
     showed_(true), topmost_(false),
     file_name(file_name_),
 #ifdef _WIN32
@@ -187,11 +184,9 @@ image::image(std::string_view file_name_, std::shared_ptr<i_theme> theme__)
 }
 
 image::image(const std::vector<uint8_t> &data)
-    : theme_(),
+    :
     position_{ 0 },
-    parent_(),
     showed_(true), topmost_(false),
-    file_name(),
 #ifdef _WIN32
     resource_index(0),
 #endif
@@ -389,6 +384,10 @@ void image::change_image(std::string_view file_name_)
 void image::change_image_raw(std::string_view data_name_,
     std::shared_ptr<i_theme> theme__)
 {
+    if (!theme__)
+    {
+        theme__ = get_default_theme();
+    }
     if (img && data_name_ == data_name
         && (!theme__ || theme__->get_name() == theme_name))
     {
@@ -396,7 +395,6 @@ void image::change_image_raw(std::string_view data_name_,
         return;
     }
 
-    data_name = data_name_;
     if (theme_)
     {
         theme_name = std::move(theme_->get_name());
@@ -406,6 +404,7 @@ void image::change_image_raw(std::string_view data_name_,
         theme_name.clear();
     }
 
+    data_name = data_name_;
     change_image(theme_image(data_name_));
 }
 

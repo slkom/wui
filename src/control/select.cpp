@@ -27,13 +27,10 @@ namespace wui
 static const int32_t select_horizontal_indent = 5;
 
 select::select(std::string_view theme_control_name, std::shared_ptr<i_theme> theme__)
-    : items_(),
-    change_callback(),
+    :
     tcn(theme_control_name),
     theme_(theme__),
     position_{ 0 },
-    parent_(),
-    my_control_sid(), my_plain_sid(),
     list_theme(make_custom_theme()),
     list_(std::make_shared<list>(list::tc, list_theme)),
     showed_(true), enabled_(true), active(false), topmost_(false),
@@ -96,21 +93,20 @@ void select::draw(graphic &gr, const rect&)
     draw_arrow_down(gr, { control_pos.right - static_cast<int32_t>(control_pos.height() / 1.5),
             control_pos.top + static_cast<int32_t>(control_pos.height() / 2.1)});
 
-    auto font_ = theme_font(tcn, tv_font, theme_);
 
-    if (static_cast<int32_t>(items_.size()) <= list_->selected_item())
+    if (list_->selected_item() < 0
+        || list_->selected_item() >= static_cast<int32_t>(items_.size()))
     {
         return;
     }
 
+    auto font_ = std::move(theme_font(tcn, tv_font, theme_));
     auto text = items_[list_->selected_item()].text;
-
-    auto text_size = measure_text(text, font_, &gr);
-
-    truncate_line(text, &gr, font_, control_pos.width() - control_pos.height());
+    truncate_line(text, &gr, font_,
+        control_pos.width() - 2 * (border_width + select_horizontal_indent));
 
     gr.draw_text({ control_pos.left + border_width + select_horizontal_indent,
-        control_pos.top + (control_pos.height() - text_size.height()) / 2 },
+        control_pos.top + border_width + (control_pos.height() - font_.size) / 2 },
         text,
         theme_color(tcn, tv_text, theme_),
         font_);
@@ -123,9 +119,9 @@ void select::draw_arrow_down(graphic &gr, const rect &pos)
     constexpr int h = 4;
     int w = 8;
 
-    for (int j = 0; j != h; ++j)
+    for (int j = 0; j < h; ++j)
     {
-        for (int i = 0; i != w; ++i)
+        for (int i = 0; i < w; ++i)
         {
             gr.draw_pixel({ pos.left + j + i, pos.top + j }, color);
         }
@@ -135,7 +131,9 @@ void select::draw_arrow_down(graphic &gr, const rect &pos)
 
 void select::select_up()
 {
-    if (!items_.empty() && list_->selected_item() > 0)
+    if (!items_.empty()
+        && list_->selected_item() > 0
+        && list_->selected_item() < static_cast<int32_t>(items_.size()))
     {
         list_->select_item(list_->selected_item() - 1);
         redraw();
@@ -144,7 +142,9 @@ void select::select_up()
 
 void select::select_down()
 {
-    if (!items_.empty() && list_->selected_item() < static_cast<int32_t>(items_.size()) - 1)
+    if (!items_.empty()
+        && list_->selected_item() >= 0
+        && list_->selected_item() + 1 < static_cast<int32_t>(items_.size()))
     {
         list_->select_item(list_->selected_item() + 1);
         redraw();
@@ -153,8 +153,9 @@ void select::select_down()
 
 void select::show_list()
 {
+    const auto border_width = theme_dimension(tcn, tv_border_width, theme_);
     list_->set_position({ position_.left, position_.top, position_.right,
-        position_.top + item_height_ * static_cast<int32_t>(items_.size()) });
+        border_width + position_.top + item_height_ * static_cast<int32_t>(items_.size()) });
     const auto pos = get_popup_position(parent_, position(), list_->position(), 0);
 
     list_->set_position(pos);
@@ -258,6 +259,16 @@ void select::receive_control_events(const event &ev)
                 focused_ = false;
                 redraw();
             break;
+            case internal_event_type::execute_focused:
+                if (!list_->showed())
+                {
+                    show_list();
+                }
+                else
+                {
+                    list_->hide();
+                }
+            break;
         }
     }
 }
@@ -308,6 +319,14 @@ void select::update_list_theme()
 void select::set_position(const rect& position__)
 {
     position_ = position__;
+    if (list_->showed())
+    {
+        list_->set_position({ position_.left, position_.top, position_.right,
+            position_.top + item_height_ * static_cast<int32_t>(items_.size()) });
+        const auto pos = get_popup_position(parent_, position(), list_->position(), 0);
+
+        list_->set_position(pos);
+    }
 }
 
 rect select::position() const
@@ -483,6 +502,10 @@ void select::set_item_height(const int32_t item_height__) noexcept
 
 void select::select_item_number(const int32_t index)
 {
+    if (index < 0 || index >= list_->get_item_count())
+    {
+        return;
+    }
     list_->select_item(index);
     redraw();
 }
@@ -503,15 +526,12 @@ select_item select::selected_item() const
 {
     auto item_number = list_->selected_item();
 
-    select_item result;
-    result.id = -1;
-
-    if (item_number != -1 && item_number < static_cast<int32_t>(items_.size()))
+    if (item_number >= 0 && item_number < static_cast<int32_t>(items_.size()))
     {
-        result = items_[item_number];
+        return items_[item_number];
     }
 
-    return result;
+    return select_item { -1, };
 }
 
 const select_items_t &select::items() const

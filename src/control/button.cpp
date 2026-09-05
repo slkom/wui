@@ -236,7 +236,7 @@ rect button::get_preferred_size()
     return pref_rect;
 }
 
-void button::draw(graphic &gr, const rect&)
+void button::draw(graphic& gr, const rect&)
 {
     if (!showed_ || position_.is_null())
     {
@@ -385,28 +385,33 @@ void button::draw(graphic &gr, const rect&)
             text_top = control_pos.top + (control_pos.height() - font_.size) / 2;
 
             caption = caption_org;
-            truncate_line(caption, &gr, font_, control_pos.right - val/2 - text_left - _text_width_space / 2);
+            truncate_line(caption, &gr, font_, control_pos.right - val / 2 - text_left - _text_width_space / 2);
         }
         break;
         default:
             return;
     }
 
-
-    // auto control_pos = position();
     if (button_view_ != button_view::anchor && button_view_ != button_view::switcher
         && button_view_ != button_view::radio && button_view_ != button_view::sheet)
     {
-        auto border_color = focused_
-            ? theme_color(tcn, tv_focused_border, theme_)
+        auto border_color = focused_ ? theme_color(tcn, tv_focused_border, theme_)
             : (!active ? theme_color(tcn, tv_border, theme_) : theme_color(tcn, tv_hover_border, theme_));
 
         auto fill_color = enabled_ ? (active || turned_ ? theme_color(tcn, tv_active, theme_) : theme_color(tcn, tv_calm, theme_)) : theme_color(tcn, tv_disabled, theme_);
 
         gr.draw_rect(control_pos, border_color, fill_color, border_width, theme_dimension(tcn, tv_round, theme_));
     }
+    else
+    {
+        // linux: background not redraw, clear
+        const auto background = theme_color(window::tc, window::tv_background, theme_);
+        const auto border_color = focused_ && button_view_ != button_view::sheet ?
+            theme_color(tcn, tv_disabled, theme_) : make_color(0, 0, 0, 0);
+        gr.draw_rect(control_pos, border_color, background, border_width, theme_dimension(tcn, tv_round, theme_));
+    }
 
-    if (button_view_ != button_view::text && button_view_ != button_view::anchor && image_)
+    if (image_ && button_view_ != button_view::text && button_view_ != button_view::anchor)
     {
         image_->set_position( { image_left,
             image_top,
@@ -440,7 +445,9 @@ void button::draw(graphic &gr, const rect&)
         gr.draw_rect({ control_pos.left, control_pos.bottom - _sheet_bottom_space,
             control_pos.left + text_rect_.width(), control_pos.bottom },
             turned_ ? theme_color(tcn, enabled_ ? tv_calm : tv_disabled, theme_) :
-                theme_color(window::tc, window::tv_background, theme_));
+                (focused_ ? theme_color(tcn, tv_disabled, theme_) :
+                    theme_color(window::tc, window::tv_background, theme_))
+        );
     }
 }
 
