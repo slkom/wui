@@ -60,21 +60,50 @@ public:
     /// NB: linux width = 1 always
     void draw_line(const rect& position, const color color_, const int32_t width = 1);
 
+    /// <summary>
+    /// get font height for lines spacing
+    /// </summary>
+    /// <param name="font__"></param>
+    /// <returns>height</returns>
+    [[nodiscard]] int32_t get_font_ideal_height(const font& font__);
+
+#ifdef _WIN32
+    /// <summary>
+    /// GDI++ : get font height for lines spacing
+    /// </summary>
+    /// <param name="font__"></param>
+    /// <returns>height</returns>
+    [[nodiscard]] int32_t get_font_ideal_height_gdiplus(const font& font__);
+#endif
+
     [[nodiscard]] rect measure_text(std::string_view text_, const font &font__);
 #ifdef _WIN32
     [[nodiscard]] rect measure_text_gdiplus(std::string_view text_, const font &font__);
 #endif
 
-    void draw_text(const rect& position, std::string_view text,
-        const color color_, const font &font_);
+    /// <summary>
+    /// draw text RGB
+    /// </summary>
+    /// <param name="position"></param>
+    /// <param name="text"></param>
+    /// <param name="color_"></param>
+    /// <param name="font_"></param>
+    void draw_text(const rect& position, std::string_view text, const color color_, const font &font_);
 
-    /// support clip and alpha
+    /// <summary>
+    /// draw text, support clip and alpha
+    /// </summary>
+    /// <param name="position"></param>
+    /// <param name="lines_data"></param>
+    /// <param name="color_"></param>
+    /// <param name="font__"></param>
+    /// <param name="clip_"></param>
     void draw_text_clip(const rect& position,
         const text_lines_t& lines_data,
         const color color_, const font& font__, const bool clip_);
 
 #ifdef _WIN32
-    void graphic::draw_text_clip_rgb(const rect& position, const text_lines_t& lines,
+    void draw_text_clip_rgb(const rect& position, const text_lines_t& lines,
         const color color_, const font& font__, const bool clip_);
 #elif __linux__
     void draw_text_clip_rgb(const rect& position, const text_lines_t& lines,
@@ -86,7 +115,7 @@ public:
 
     void draw_rect(const rect& position, const color fill_color);
     void draw_rect(const rect& position, const color border_color,
-        const color fill_color, const uint32_t border_width, const uint32_t round);
+        const color fill_color, const int32_t border_width, const int32_t round);
 
     /// draw some buffer on context
     void draw_buffer(const rect& position, uint8_t *buffer, const int32_t left_shift,
@@ -144,11 +173,13 @@ private:
 //NB: ? добавить для совместимости с wui-1.3.260215 example simple
 //void init_text_measurer(graphic* gr) noexcept;
 
+[[nodiscard]] int32_t get_font_ideal_height(const font& font_, graphic* gr);
 [[nodiscard]] rect measure_text(std::string_view text, const font &font_, graphic *gr = nullptr);
 /// measure text, hash not use
 [[nodiscard]] rect measure_text_direct(std::string_view text, const font &font_, graphic *gr = nullptr);
 
 #ifdef _WIN32
+[[nodiscard]] int32_t get_font_ideal_height_gdiplus(const font& font_, graphic* gr);
 [[nodiscard]] rect measure_text_gdiplus(std::string_view text, const font &font_, graphic *gr = nullptr);
 /// measure text, hash not use
 [[nodiscard]] rect measure_text_gdiplus_direct(std::string_view text, const font &font_, graphic *gr = nullptr);
