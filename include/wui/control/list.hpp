@@ -180,7 +180,10 @@ private:
 
     void draw_items(graphic &gr_);
 
-    [[nodiscard]] bool has_scrollbar() const noexcept;
+    [[nodiscard]] bool has_scrollbar() const noexcept
+    {
+        return scroll_area > 2;
+    }
 
     void update_selected_item(int32_t y);
     void update_active_item(int32_t y);
