@@ -118,9 +118,23 @@ void a_text::make_lines(const std::string_view text, std::vector<std::string> &l
     }
 }
 
+int32_t text::font_ideal_height(const font& font_, graphic* gr)
+{
+    return get_font_ideal_height(font_, gr);
+}
+
 int32_t text::measure_text_line(const std::string &text__, const font& font__)
 {
     return measure_text(text__, font__).width();
+}
+
+int32_t text_ex::font_ideal_height(const font& font_, graphic* gr)
+{
+#ifdef _WIN32
+    return get_font_ideal_height_gdiplus(font_, gr);
+#else
+    return get_font_ideal_height(font_, gr);
+#endif
 }
 
 int32_t text_ex::measure_text_line(const std::string& text__, const font& font__)
@@ -134,7 +148,7 @@ int32_t text_ex::measure_text_line(const std::string& text__, const font& font__
 
 rect a_text::get_preferred_size()
 {
-    const auto font_ = theme_font(tcn, tv_font, theme_);
+    const auto font_ = std::move(theme_font(tcn, tv_font, theme_));
     if (text_.empty())
     {
         return rect{ 0, 0, 0, font_.size };
@@ -157,7 +171,7 @@ rect a_text::get_preferred_size()
         }
     }
     const auto line_height = font_.size;
-    const auto line_space = static_cast<int32_t>(line_height * space_coeff_);
+    const auto line_space = static_cast<int32_t>(font_ideal_height(font_, nullptr) * space_coeff_);
     const int32_t height_max = line_height + static_cast<int32_t>((lines.size() - 1)) * line_space;
     return rect{ 0, 0, width_max, height_max };
 }
@@ -210,10 +224,10 @@ void a_text::update_text(graphic* gr, const bool clip__)
         return;
     }
 
-    const auto font_ = theme_font(tcn, tv_font, theme_);
+    const auto font_ = std::move(theme_font(tcn, tv_font, theme_));
     const auto line_height = font_.size;
     const rect control_pos{ 0, 0, position_.width(), position_.height()};
-    const auto line_space = static_cast<int32_t>(line_height * space_coeff_);
+    const auto line_space = static_cast<int32_t>(font_ideal_height(font_, nullptr) * space_coeff_);
 
     int32_t line_top{ control_pos.top };
 #ifdef _UI_CHECK
@@ -320,7 +334,7 @@ void a_text::update_text(graphic* gr, const bool clip__)
 
 void text::draw_text(graphic& gr)
 {
-    const auto font_ = theme_font(tcn, tv_font, theme_);
+    const auto font_ = std::move(theme_font(tcn, tv_font, theme_));
     const auto color_ = theme_color(tcn, tv_color, theme_);
     //if(clip_)
     //{
@@ -338,7 +352,7 @@ void text::draw_text(graphic& gr)
 
 void text_ex::draw_text(graphic& gr)
 {
-    const auto font_ = theme_font(tcn, tv_font, theme_);
+    const auto font_ = std::move(theme_font(tcn, tv_font, theme_));
     gr.draw_text_clip(position(), lines_, theme_color(tcn, tv_color, theme_), font_, clip_);
 }
 
@@ -388,10 +402,10 @@ void a_text::set_position(const rect& position__)
 
     if (!clip_)
     {
-        const auto font_ = theme_font(tcn, tv_font, theme_);
-        if (position__.height() < font_.size)
+        const auto font_size = theme_font(tcn, tv_font, theme_).size;
+        if (position__.height() < font_size)
         {
-            position_.bottom = position_.top + font_.size;
+            position_.bottom = position_.top + font_size;
         }
     }
 
