@@ -16,6 +16,9 @@
 #include <xcb/xcb_image.h>
 #include <cairo.h>
 #include <cairo-xcb.h>
+#include <cmath>
+
+//#define _CAIRO_RESIZE_FONT // tested option
 #endif
 
 namespace wui
@@ -245,7 +248,25 @@ _cairo *primitive_container::get_font(const font& font_, _cairo_surface *surface
         !(font_.decorations_ & decorations::bold) ? CAIRO_FONT_WEIGHT_NORMAL : CAIRO_FONT_WEIGHT_BOLD);
     cairo_set_font_size(cr, font_.size);
 
+#ifdef _CAIRO_RESIZE_FONT
+    // TODO: решает проблему там, где используется font_.size,
+    // иначе надо добавлять
+    // linux: graphic::get_font_size(font ) { ...; return font_extents.ascent + font_extents.descent;}
+    // win32: graphic::get_font_size(font font_) { return font_.size; }
+
+    cairo_font_extents_t font_extents;
+    cairo_font_extents(cr, &font_extents);
+    double h = font_extents.ascent + font_extents.descent;
+    if (h > font_.size + 2)
+    {
+        h = font_.size * (font_.size / h);
+        cairo_set_font_size(cr, std::ceil(h));
+    }
+    fonts[{ {font_.name, std::ceil(h) }, font_.decorations_ }] = cr;
+#else
     fonts[{ {font_.name, font_.size }, font_.decorations_ }] = cr;
+#endif
+
 
     return cr;
 }
