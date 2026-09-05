@@ -25,17 +25,17 @@ struct rect
 {
     int32_t left, top, right, bottom;
 
-    inline bool operator==(const rect &lr) noexcept
+    inline bool operator==(const rect &lr) const noexcept
     {
         return lr.left == left && lr.top == top && lr.right == right && lr.bottom == bottom;
     }
 
-    inline bool operator>(const rect &lr) noexcept
+    inline bool operator>(const rect &lr) const noexcept
     {
         return width() > lr.width() && height() > lr.height();
     }
 
-    inline rect operator+(const rect &lr) noexcept
+    inline rect operator+(const rect &lr) const noexcept
     {
         // что делает? геом. смысл
         return rect{ left + lr.left, top + lr.top, left + lr.right, top + lr.bottom };
@@ -64,6 +64,10 @@ struct rect
     inline bool is_null() const noexcept
     {
         return 0 == left && 0 == top && 0 == right && 0 == bottom;
+    }
+    inline bool is_hide() const noexcept
+    {
+        return left >= right || top >= bottom;
     }
 
     inline bool empty() const noexcept
