@@ -163,7 +163,9 @@ public:
 
 protected:
 
-    static constexpr double _default_space_coeff = 0.8;
+    static constexpr double _default_space_coeff = 1.0;
+
+    [[nodiscard]] virtual int32_t font_ideal_height(const font& font_, graphic* gr) = 0;
 
     /// return text width
     [[nodiscard]] virtual int32_t measure_text_line(const std::string& text__,
@@ -230,6 +232,8 @@ public:
     virtual ~text();
 
 protected:
+    [[nodiscard]] virtual int32_t font_ideal_height(const font& font_, graphic* gr);
+
     /// return text width
     [[nodiscard]] virtual int32_t measure_text_line(const std::string& text__,
         const font& font__) override;
@@ -256,6 +260,8 @@ public:
     virtual ~text_ex();
 
 protected:
+    [[nodiscard]] virtual int32_t font_ideal_height(const font& font_, graphic* gr);
+
     /// return: text width
     [[nodiscard]] virtual int32_t measure_text_line(const std::string& text__,
         const font& font__) override;
