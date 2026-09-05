@@ -96,6 +96,7 @@ public:
     void turn(bool on);
     [[nodiscard]] bool turned() const;
     [[nodiscard]] rect get_preferred_size();
+    [[nodiscard]] int32_t get_font_size() const;
 
     void set_callback(std::function<void(void)> click_callback);
     void set_callback_down(std::function<void(void)> click_callback);
@@ -128,7 +129,12 @@ public:
     static constexpr const char *ti_radio_off = "button_radio_off";
     static constexpr const char *ti_radio_on = "button_radio_on";
 
+    static constexpr int32_t _sheet_bottom_space = 2;
+    static constexpr int32_t _ident_left = 4;
+    static constexpr int32_t _text_width_space = 10;
+    static constexpr int32_t _text_height_space = 6;
 private:
+
     button_view button_view_;
     std::string caption;
     std::string caption_org;
@@ -144,7 +150,8 @@ private:
     std::string tcn; /// control name in theme
     std::shared_ptr<i_theme> theme_;
 
-    rect position_;
+    rect position_{};
+    rect position_org{};
 
     std::weak_ptr<window> parent_;
     std::string my_subscriber_id;
