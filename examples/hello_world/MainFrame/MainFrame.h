@@ -35,7 +35,7 @@ private:
 
     void OnOK();
 
-    static constexpr int32_t WND_WIDTH = 300, WND_HEIGHT = 350;
+    static constexpr int32_t WND_WIDTH = 450, WND_HEIGHT = 350;
 
     std::shared_ptr<wui::window> window = std::make_shared<wui::window>();
 
