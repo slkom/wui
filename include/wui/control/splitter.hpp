@@ -94,7 +94,6 @@ private:
     std::string my_control_sid, my_plain_sid;
 
     bool showed_, enabled_, active, topmost_;
-    cursor cursor_{ cursor::no_ };
     rect prev_pos;
 
     void receive_control_events(const event &ev);
