@@ -36,7 +36,7 @@ namespace wui
 
     static cursor _cursor{ cursor::no_ }; // предотвращаем затратные операции
 
-    // может понадобится при смене фокуса
+    // понадобится при смене фокуса
     void reset_cursor()
     {
         _cursor = cursor::no_;
@@ -183,6 +183,7 @@ rect get_control_position(const rect& control_position, std::weak_ptr<window> pa
     auto parent_ = parent.lock();
     if (parent_ && !parent_->parent().expired())
     {
+        auto t = parent_->parent().lock();
         const rect r = parent_->position();
         out_pos.move(r.left, r.top);
     }
