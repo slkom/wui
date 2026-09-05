@@ -33,10 +33,13 @@ public:
 
     void UpdateSize(const int32_t width, const int32_t height, const bool top_only_update = false);
 
-    static constexpr int32_t sheets_height = 30;
-
+    void set_sheets_height(const int32_t sheets_height_)
+    {
+        sheets_height = sheets_height_;
+    }
 private:
     int32_t value_{ 8 };
+    int32_t sheets_height{ 30 };
     void IncSizeTextRect();
     void DecSizeTextRect();
     void redraw(const bool top_only_update = false);

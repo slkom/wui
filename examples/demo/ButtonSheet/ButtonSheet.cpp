@@ -82,9 +82,10 @@ void ButtonSheet::Run(std::weak_ptr<wui::window> parentWindow__)
 
         r = imageButton->get_preferred_size();
         r1 = imageRightTextButton->get_preferred_size();
-        int32_t h = wui::rect::max(r, r1).height();
-        parentWindow->add_control(imageButton, { 10, top, 10 + r.width(), top + h });
-        parentWindow->add_control(imageRightTextButton, { 20 + r.width(), top, 20 + r.width() + r1.width(), top + h });
+        const auto h = std::max(r.height(), r1.height());
+        const auto h_image = std::max(r.width(), h);
+        parentWindow->add_control(imageButton, { 10, top, 10 + h_image, top + h });
+        parentWindow->add_control(imageRightTextButton, { 20 + h_image, top, 20 + h_image + r1.width(), top + h });
         top += h + space;
 
         r = imageBottomTextButton->get_preferred_size();
@@ -108,7 +109,7 @@ void ButtonSheet::Run(std::weak_ptr<wui::window> parentWindow__)
         r = sheetButton0->get_preferred_size();
         parentWindow->add_control(sheetButton0, { 10, top, 10 + r.width(), top + r.height() });
         r1 = sheetButton1->get_preferred_size();
-        parentWindow->add_control(sheetButton1, { 20 + r.width(), top, 20 + r.width() + r1.width(), top + r1.height() });
+        parentWindow->add_control(sheetButton1, { 10 + 10 + r.width(), top, 10 + 10 + r.width() + r1.width(), top + r1.height() });
     }
 
 }

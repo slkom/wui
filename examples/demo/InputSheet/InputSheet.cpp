@@ -22,7 +22,7 @@ InputSheet::InputSheet()
     input0(std::make_shared<wui::input>("Type some text here", wui::input_view::multiline))
 {
     input0->set_change_callback([this]() { inputText->set_text(input0->text()); });
-    input0->set_return_callback([this]() { inputText->set_text("You pressed Enter"); });
+    input0->set_return_callback([this]() { inputText->set_text(input0->text() + "\n\n* You press 'RETURN'..."); });
 }
 
 void InputSheet::Run(std::weak_ptr<wui::window> parentWindow__)

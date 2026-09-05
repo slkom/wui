@@ -49,7 +49,6 @@ MainFrame::MainFrame()
         std::placeholders::_1),
         wui::event_type::internal | wui::event_type::system | wui::event_type::keyboard);
 
-    //window->set_min_size(WND_WIDTH - 1, WND_HEIGHT - 1); // -1 ?
     window->set_min_size(WND_WIDTH, WND_HEIGHT);
 }
 
@@ -100,8 +99,6 @@ void MainFrame::ReceiveEvents(const wui::event &ev)
         switch (ev.internal_event_.type)
         {
             case wui::internal_event_type::window_created:
-                // The main window is already initialized (context and graphics).
-                // Font size and str length calculations are available (get_preferred_size(), measure_text(), ...).
                 window->add_control(mainSheet, { 0 });
                 window->add_control(windowSheet, { 0 });
                 window->add_control(buttonSheet, { 0 });
@@ -135,7 +132,6 @@ void MainFrame::ReceiveEvents(const wui::event &ev)
 
 void MainFrame::UpdateSheetsSize()
 {
-    constexpr int32_t sheets_height = MainSheet::sheets_height;
     const auto width = window->position().width(), height = window->position().height();
     const auto sheet_width = (width - 140) / 7;
 
@@ -144,6 +140,8 @@ void MainFrame::UpdateSheetsSize()
         sheets_top = window->caption_height() + 2;
     }
 
+    const int32_t sheets_height = mainSheet->get_preferred_size().height();
+    mainSheetImpl.set_sheets_height(sheets_height);
     mainSheet->set_position({ 10, sheets_top, sheet_width, sheets_top + sheets_height });
     windowSheet->set_position({ 10 * 2 + sheet_width, sheets_top, 10 * 2 + sheet_width * 2, sheets_top + sheets_height });
     buttonSheet->set_position({ 10 * 3 + sheet_width * 2, sheets_top, 10 * 3 + sheet_width * 3, sheets_top + sheets_height });

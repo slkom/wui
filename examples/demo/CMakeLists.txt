@@ -1,4 +1,4 @@
-file(GLOB SOURCES 
+file(GLOB SOURCES
 	*.cpp
 	ButtonSheet/*.cpp
 	InputSheet/*.cpp

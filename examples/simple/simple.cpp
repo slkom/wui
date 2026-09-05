@@ -32,9 +32,14 @@ static constexpr int32_t WND_WIDTH = 900, WND_HEIGHT = 600;
 static constexpr wui::window_style main_window_style =
     wui::window_style::frame | wui::window_style::switch_theme_button | wui::window_style::border_all;
 
-// test position close-button [x] | wui::window_style::border_all
 static constexpr wui::window_style pluged_window_style =
-    wui::window_style::pinned | wui::window_style::border_right;
+wui::window_style::pinned | wui::window_style::border_right | wui::window_style::title_showed;
+static constexpr wui::window_style unpluged_window_style =
+wui::window_style::pinned | wui::window_style::border_all | wui::window_style::title_showed;
+
+constexpr int32_t _splitter_width = 5;
+constexpr int32_t _splitter_space_left = 20 + _splitter_width;
+constexpr int32_t _splitter_default_left = 300;
 
 static std::shared_ptr<wui::i_theme> MakeRedButtonTheme()
 {
@@ -70,54 +75,74 @@ struct PluggedWindow : public std::enable_shared_from_this<PluggedWindow>
     std::shared_ptr<wui::message> messageBox;
     std::shared_ptr<wui::window> dialog;
 
-    bool plugged;
-
-    int32_t splitterPos;
+    int32_t splitterPos{ };
+    bool plugged{ false };
     wui::rect unplug_rect{ };
+    wui::rect plug_rect{ };
 
     void Plug()
     {
-        unplug_rect = window->position(); // спасаем позицию
+        if (!unplug_rect.empty())
+            unplug_rect = window->position(); // old unplug window position
         auto parentWindow_ = parentWindow.lock();
         if (parentWindow_)
         {
             plugged = true;
+            //parentWindow_->emit_event(5555, -1);
+
             const auto pos = parentWindow_->position();
-            const auto cap_h = parentWindow_->caption_height(main_window_style); // 35
-            parentWindow_->add_control(window,
-                { 0, cap_h, 0 == vertSplitter->position().left ? 300 : vertSplitter->position().left,
-                pos.empty() ? WND_HEIGHT : pos.height() });
+            const auto cap_h = parentWindow_->caption_height(main_window_style);
+            const auto splitter_pos = vertSplitter->position();
+            plug_rect = {
+                    0, cap_h,
+                    0 == splitter_pos.left ? _splitter_default_left : splitter_pos.left,
+                    pos.empty() ? WND_HEIGHT : pos.height()
+            };
+
+            parentWindow_->add_control(window, plug_rect);
+            window->set_caption("Child plugged [Docked]");
+            window->set_style(pluged_window_style);
         }
     }
 
     void Unplug()
     {
         auto parentWindow_ = parentWindow.lock();
-        if (parentWindow_) {
+        if (parentWindow_)
+        {
             parentWindow_->remove_control(window);
         }
-        Init(plugged);
+        if (unplug_rect.empty())
+        {
+            unplug_rect = window->position(); // first
+            const auto pos = parentWindow_->position();
+            unplug_rect.resize(unplug_rect.width(), pos.height());
+            unplug_rect.set(pos.left - unplug_rect.width() - 1, pos.top);
+        }
+
         plugged = false;
+        Init();
+
+        window->set_caption("Window unplugged!");
     }
 
-    void Init(const bool plugged_prev)
+    void Init()
     {
-        if(unplug_rect.empty())
-            unplug_rect = window->position(); // спасаем позицию
-        if (plugged_prev)
+        if (!plugged)
         {
             auto parentWindow_ = parentWindow.lock();
             if (parentWindow_)
             {
                 const auto pos = parentWindow_->position();
-                unplug_rect.set(pos.left - unplug_rect.width(), pos.top);
+                unplug_rect.set(pos.left - unplug_rect.width() - 1, pos.top); // move
             }
         }
 
-        window->init("Child window plugged!", unplug_rect,
-            pluged_window_style,
-            [this]() {
-                // close window only (excluded parent->add_control())
+
+        window->init("Child plugged [Docked]", plugged ? plug_rect : unplug_rect,
+            plugged ? pluged_window_style : unpluged_window_style,
+            [this]()
+            {
                 auto parentWindow_ = parentWindow.lock();
                 if (parentWindow_)
                     parentWindow_->emit_event(5555, 0);
@@ -211,27 +236,26 @@ struct PluggedWindow : public std::enable_shared_from_this<PluggedWindow>
 
                                     int32_t top = dialog->caption_height();
                                     top += space;
+
                                     std::shared_ptr<wui::text> text1(std::make_shared<wui::text>("Account",
-                                        wui::hori_alignment::center, wui::vert_alignment::center,
-                                        wui::text::tc));
+                                        wui::hori_alignment::center, wui::vert_alignment::center, wui::text::tc));
+                                    std::shared_ptr<wui::input> input1(std::make_shared<wui::input>());
+                                    std::shared_ptr<wui::input> input2(std::make_shared<wui::input>());
+                                    std::shared_ptr<wui::select> select1(std::make_shared<wui::select>());
 
                                     wui::rect r = text1->get_preferred_size();
                                     int32_t hc = r.height() + 8;
                                     dialog->add_control(text1, { space, top, space + r.width(), top + hc });
                                     text1->set_text("Account");
                                     top += hc + space;
-                                    std::shared_ptr<wui::input> input1(std::make_shared<wui::input>());
                                     input1->set_text("98753");
                                     hc = input1->get_font_size() + 8;
                                     dialog->add_control(input1, { space, top, space + ctrl_width, top + hc });
                                     top += hc + space;
-                                    std::shared_ptr<wui::input> input2(std::make_shared<wui::input>());
                                     input2->set_text("99wegdyug");
                                     hc = input2->get_font_size() + 8;
                                     dialog->add_control(input2, { space, top, space + ctrl_width, top + hc });
                                     top += hc + space;
-
-                                    std::shared_ptr<wui::select> select1(std::make_shared<wui::select>());
 
                                     wui::select_items_t items = {
                                         { 1, "123" }, { 2, "256" }, { 3, "389" }, // test up
@@ -246,20 +270,22 @@ struct PluggedWindow : public std::enable_shared_from_this<PluggedWindow>
                                     hc = select1->get_font_size() + 8;
                                     dialog->add_control(select1, { space, top, space + ctrl_width, top + hc });
                                     top += hc + space;
-                                    wui::rect pos = dialog->position();
-                                    pos.resize(2 * space + ctrl_width, top + 100);
-                                    dialog->set_position(pos);
+
+                                    //wui::rect pos = dialog->position();
+                                    //pos.resize(2 * space + ctrl_width, top + 100);
+                                    //dialog->set_position(pos);
+                                    dialog->set_tw_preferred_position(2 * space + ctrl_width, top + 100);
                                 }
                                 break;
                             }
                         }
                     }, wui::event_type::internal);
 
-                dialog->init("Modal dialog", { 50, 50, 260, 350 }, wui::window_style::dialog);
+                dialog->init("Modal top dialog", { 50, 50, 260, 350 }, wui::window_style::dialog_topmost);
             }
         , wui::button_view::image, IMG_ACCOUNT, 16)),
 
-        input(std::make_shared<wui::input>("", wui::input_view::multiline)),
+        input(std::make_shared<wui::input>("multi-line text", wui::input_view::multiline)),
         messageBox(std::make_shared<wui::message>(parentWindow_, true)),
         dialog(std::make_shared<wui::window>()),
         plugged(false),
@@ -407,7 +433,7 @@ struct PluggedWindow : public std::enable_shared_from_this<PluggedWindow>
                                 if (result == wui::message_result::yes)
                                 {
                                     dialog->set_transient_for(window);
-                                    dialog->init("Modal dialog", { 50, 50, 350, 350 }, wui::window_style::dialog, []() {});
+                                    dialog->init("Modal top dialog", { 50, 50, 350, 350 }, wui::window_style::dialog_topmost, []() {});
                                 }
                             });*/
                         list->make_selected_visible();
@@ -443,7 +469,7 @@ struct PluggedWindow : public std::enable_shared_from_this<PluggedWindow>
 
         Plug();
         plugged = true;
-        Init(false);
+        Init();
     }
 
     void DrawListItem(wui::graphic &gr, int32_t nItem, const wui::rect &itemRect, wui::list::item_state state)
@@ -519,9 +545,8 @@ int main(int argc, char *argv[])
     // The main window has not yet been initialized (context and graphics).
     // Font sizes and text length calculations are not available.
 
-    // NB: Font size text str length calculations are available
-    // (get_preferred_size(), measure_text(), ...)
-    // when the wui::internal_event_type::window_created event occurs or later
+    // When the wui::internal_event_type::window_create event occurs, the following become available:
+    // font size, text length calculations (get_preferred_size(), measure_text(), ...)
 
     auto menuImage1 = std::make_shared<wui::image>(IMG_ACCOUNT);
     auto menuImage2 = std::make_shared<wui::image>(IMG_SETTINGS);
@@ -543,7 +568,10 @@ int main(int argc, char *argv[])
             { 2, wui::menu_item_state::separator, "Expand me, 2", "Ctrl+Z", nullptr, {
                     { 21, wui::menu_item_state::normal, "Expanded, 2.1", "", nullptr, {}, [&menu_select_text](int32_t i) { menu_select_text->set_text(std::string("Menu: ") + std::to_string(i)); } },
                     { 22, wui::menu_item_state::normal, "Expanded, 2.2", "", nullptr, {}, [&menu_select_text](int32_t i) { menu_select_text->set_text(std::string("Menu: ") + std::to_string(i)); } },
-                    { 23, wui::menu_item_state::separator, "Expanded, 2.3", "", nullptr, {}, [&menu_select_text](int32_t i) { menu_select_text->set_text(std::string("Menu: ") + std::to_string(i)); } },
+                    { 23, wui::menu_item_state::normal, "Expanded, 2.3", "", nullptr, {}, [&menu_select_text](int32_t i) { menu_select_text->set_text(std::string("Menu: ") + std::to_string(i)); } },
+                    { 24, wui::menu_item_state::normal, "Expanded, 2.4", "", nullptr, {}, [&menu_select_text](int32_t i) { menu_select_text->set_text(std::string("Menu: ") + std::to_string(i)); } },
+                    { 25, wui::menu_item_state::normal, "Expanded, 2.5", "", nullptr, {}, [&menu_select_text](int32_t i) { menu_select_text->set_text(std::string("Menu: ") + std::to_string(i)); } },
+                    { 26, wui::menu_item_state::separator, "Expanded, 2.6", "", nullptr, {}, [&menu_select_text](int32_t i) { menu_select_text->set_text(std::string("Menu: ") + std::to_string(i)); } },
                 }, [&menu_select_text](int32_t i) { menu_select_text->set_text(std::string("Menu select: ") + std::to_string(i)); } },
             { 3, wui::menu_item_state::normal, "Exit, 3", "Alt+F4", nullptr, {},
             [&window](int32_t i) {
@@ -586,13 +614,6 @@ int main(int argc, char *argv[])
 
     auto createPluggedButton = std::make_shared<wui::button>("Create plugged window", []() {});
     createPluggedButton->set_callback([&window, &pluggedWindow, &createPluggedButton, &vertSplitter]() {
-        if (pluggedWindow)
-        {
-            // предотвращаем проблемы (пример, если createPluggedButton не отключен)
-            pluggedWindow->window->close();
-        }
-
-        pluggedWindow.reset();
 
         pluggedWindow = std::make_shared<PluggedWindow>(window, vertSplitter);
 
@@ -652,60 +673,61 @@ int main(int argc, char *argv[])
 
     auto messageBox = std::make_shared<wui::message>(dialog);
 
+    auto dialogMsgButton = std::make_shared<wui::button>("Test message",
+        [&]()
+        {
+            messageBox->show("Test message",
+                "Test title", wui::message_icon::information,
+                wui::message_button::ok);
+        });
+    auto dialogCloseButton = std::make_shared<wui::button>("Close",
+        [&dialog]()
+        {
+            dialog->close();
+        });
+    auto text1 = std::make_shared<wui::text>("ACCOUNT");
+    auto input1 = std::make_shared<wui::input>();
+    auto text2 = std::make_shared<wui::text>("Your Phone:");
+    auto input2 = std::make_shared<wui::input>();
+    auto select1 = std::make_shared<wui::select>();
+    auto list1 = std::make_shared<wui::list>();
+
     auto editButton = std::make_shared<wui::button>("Edit",
-        [&messageBox, &window, &dialog]()
+        [&]()
     {
         dialog->set_transient_for(window);
         dialog->subscribe(
-            [&messageBox, &dialog](const wui::event& e) {
+            [&](const wui::event& e) {
                 if (e.type & wui::event_type::internal) {
                     switch (e.internal_event_.type) {
                         case wui::internal_event_type::window_created:
                         {
                             constexpr int32_t space = 10;
 
-                            auto dialogMsgButton = std::make_shared<wui::button>("Test message",
-                                [&]() {
-                                    messageBox->show("Test message",
-                                        "Test title", wui::message_icon::information,
-                                        wui::message_button::ok);
-                                });
-                            const wui::rect r1 = dialogMsgButton->get_preferred_size();
-
-                            auto dialogCloseButton = std::make_shared<wui::button>("Close",
-                                [&dialog]()
-                                {
-                                    dialog->close();
-                                });
                             const wui::rect r2 = dialogCloseButton->get_preferred_size();
+                            const wui::rect r1 = dialogMsgButton->get_preferred_size();
 
                             const int32_t ctrl_width = 40 + (r1.width() + space + r2.width()); // 210
 
-
                             int32_t top = dialog->caption_height();
                             top += space;
-                            auto text1 = std::make_shared<wui::text>("ACCOUNT");
                             wui::rect r = text1->get_preferred_size();
                             int32_t hc = r.height() + 8;
                             dialog->add_control(text1, { space, top, space + r.width(), top + hc });
                             top += hc + space;
 
-                            auto input1 = std::make_shared<wui::input>();
                             hc = input1->get_font_size() + 8;
                             dialog->add_control(input1, { space, top, space + ctrl_width, top + hc });
                             top += hc + space;
 
-                            auto text2 = std::make_shared<wui::text>("Your Phone:");
                             hc = text2->get_font_size() + 8;
                             dialog->add_control(text2, { space, top, space + ctrl_width, top + hc });
                             top += hc + space;
 
-                            auto input2 = std::make_shared<wui::input>();
                             hc = input2->get_font_size() + 8;
                             dialog->add_control(input2, { space, top, space + ctrl_width, top + hc });
                             top += hc + space;
 
-                            auto select1 = std::make_shared<wui::select>();
                             wui::select_items_t items = {
                                 { 1, "123" }, { 2, "456" },
                                 { 3, "789" }, { 4, "101112" },
@@ -717,7 +739,6 @@ int main(int argc, char *argv[])
                             dialog->add_control(select1, { space, top, space + ctrl_width, top + hc });
                             top += hc + space;
 
-                            auto list1 = std::make_shared<wui::list>();
                             hc = 5 * list1->get_font_size() + 8;
                             dialog->add_control(list1, { space, top, space + ctrl_width, top + hc });
                             top += hc + space;
@@ -729,18 +750,19 @@ int main(int argc, char *argv[])
                             dialog->add_control(dialogMsgButton, { left_but, top, left_but + r1.width(), top + hc_but });
                             dialog->add_control(dialogCloseButton,
                                 { left_but + r1.width() + space, top, left_but + r1.width() + space + r2.width(), top + hc_but });
-                            dialog->set_default_push_control(dialogCloseButton);
+
+                            // NB: key 'return' close dialog, bad idea if this dialog used input control.
+                            // dialog->set_default_push_control(dialogCloseButton);
+
                             top += hc_but + space;
-                            wui::rect pos = dialog->position();
-                            pos.resize(width, top + 90);
-                            dialog->set_position(pos);
+                            dialog->set_tw_preferred_position(width, top + 20);
                         }
                         break;
                     }
                 }
             }, wui::event_type::internal);
 
-        dialog->init("Modal dialog", { -1, -1, 350, 550 }, wui::window_style::dialog, [&dialog]() { /*dialog.reset();*/ });
+        dialog->init("Modal top dialog", { -1, -1, 350, 550 }, wui::window_style::dialog_topmost, [&dialog]() { /*dialog.reset();*/ });
     });
 
     auto exitButton = std::make_shared<wui::button>("Exit",
@@ -750,7 +772,7 @@ int main(int argc, char *argv[])
         wui::button_view::image_right_text, IMG_ACCOUNT, 24, wui::button::tc, MakeRedButtonTheme());
 
     auto darkThemeButton = std::make_shared<wui::button>("Set the dark theme",
-        [&window, &pluggedWindow, &dialog, &editButton, &exitButton, &menu_select_text, &menu]() {
+        [&]() {
         auto current_theme = "dark";
         wui::set_current_app_theme(current_theme);
         wui::error err;
@@ -763,20 +785,18 @@ int main(int argc, char *argv[])
 
         window->update_theme();
         window->set_button_next_theme();
-        menu->update_theme();
+        select1->update_theme();
 
         pluggedWindow->window->update_theme();
         dialog->update_theme();
         exitButton->update_theme(MakeRedButtonTheme());
-        editButton->update_theme();
-        menu_select_text->update_theme();
     });
     window->add_control(darkThemeButton, { 320, 350, 440, 375 });
 
     darkThemeButton->turn(true);
 
     auto whiteThemeButton = std::make_shared<wui::button>("Set the light theme",
-        [&window, &pluggedWindow, &dialog, &editButton, &exitButton, &menu_select_text, &menu]() {
+        [&]() {
         auto current_theme = "light";
         wui::set_current_app_theme(current_theme);
         wui::error err;
@@ -789,13 +809,14 @@ int main(int argc, char *argv[])
 
         window->update_theme();
         window->set_button_next_theme();
-        menu->update_theme();
+        //menu->update_theme();
 
         pluggedWindow->window->update_theme();
         dialog->update_theme();
-        editButton->update_theme();
+        //editButton->update_theme();
+        select1->update_theme();
         exitButton->update_theme(MakeRedButtonTheme());
-        menu_select_text->update_theme();
+        //menu_select_text->update_theme();
         });
     window->add_control(whiteThemeButton, { 500, 350, 620, 375 });
 
@@ -803,8 +824,6 @@ int main(int argc, char *argv[])
 
     window->add_control(editButton, { 240, 450, 350, 480 });
     window->add_control(exitButton, { 370, 450, 480, 480 });
-
-    window->set_min_size(500, 500);
 
     vertSplitter->set_callback(
         [&](int32_t x, int32_t y) {
@@ -874,7 +893,7 @@ int main(int argc, char *argv[])
                 if (pos.height() != h)
                 {
                     pluggedWindow->window->set_position({ 0, 30, pos.width(), h });
-                    vertSplitter->set_position({ pos.width(), 30, pos.width() + 5, h });
+                    vertSplitter->set_position({ pos.width(), 30, pos.width() + _splitter_width, h });
                 }
             }
 
@@ -924,20 +943,21 @@ int main(int argc, char *argv[])
             window->update_theme();
             pluggedWindow->window->update_theme();
             dialog->update_theme();
-            menu->update_theme();
+            select1->update_theme();
+            //menu->update_theme();
             exitButton->update_theme(MakeRedButtonTheme());
-            editButton->update_theme();
+            //editButton->update_theme();
         }
     });
 
-    window->set_default_push_control(editButton);
+    window->set_min_size(500, 500);
 
     window->init("Hello from WUI!", { -1, -1, WND_WIDTH, WND_HEIGHT },
         main_window_style, [window]() {});
 
     window->enable_device_change_handling(true);
 
-    memo->set_text("Текстовый редактор\n   \n"
+    memo->set_text("Текстовый редактор\n\n"
         "Мы вынуждены отталкиваться от того, что дальнейшее развитие различных \n"
         "форм деятельности выявляет срочную потребность вывода текущих активов.\n"
         "Сложно сказать,почему элементы политического процесса набирают популярность\n"
@@ -945,7 +965,7 @@ int main(int argc, char *argv[])
         "Но акционеры крупнейших компаний лишь добавляют фракционных разногласий и заблокированы в рамках\n"
         "своих собственных рациональных ограничений.");
 
-    memo->scroll_to_end();
+    // memo->scroll_to_end();
 
     wui::framework::run();
 

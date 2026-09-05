@@ -72,7 +72,7 @@ int main(int argc, char *argv[])
         { "light", "res/light.json", TXT_LIGHT_THEME }
         });
 
-    auto current_theme = wui::config::get_string("User", "Theme", "dark");
+    auto current_theme = std::move(wui::config::get_string("User", "Theme", "dark"));
     wui::set_current_app_theme(current_theme);
 
     wui::set_default_theme_from_name(current_theme, err);

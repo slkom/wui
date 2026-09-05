@@ -46,7 +46,7 @@ private:
         wui::hori_alignment::center, wui::vert_alignment::center,
         "h1_text");
 
-    std::shared_ptr<wui::input> userNameInput = std::make_shared<wui::input>(wui::config::get_string("User", "Name", ""));
+    std::shared_ptr<wui::input> userNameInput = std::make_shared<wui::input>(std::move(wui::config::get_string("User", "Name", "")));
 
     std::shared_ptr<wui::button> okButton = std::make_shared<wui::button>(
         wui::locale("main_frame", "ok_button"),

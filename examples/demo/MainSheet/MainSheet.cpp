@@ -130,8 +130,7 @@ void MainSheet::redraw(const bool top_only_update)
     }
 }
 
-void MainSheet::UpdateSize(const int32_t width, const int32_t height,
-    const bool top_only_update)
+void MainSheet::UpdateSize(const int32_t width, const int32_t height, const bool top_only_update)
 {
     constexpr int32_t space = 10;
     constexpr int32_t space_top = 40;//space * 10;

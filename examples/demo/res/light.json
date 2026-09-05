@@ -104,7 +104,7 @@
       "border_width": 1,
       "hover_border": "#888887",
       "focused_border": "#444443",
-      "round": 8,
+      "round": 5,
       "font": {
         "name": "Segoe UI",
         "size": 20
