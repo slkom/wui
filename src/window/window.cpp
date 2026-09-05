@@ -50,6 +50,8 @@
 
 #include <cstring>
 
+#include <X11/Xatom.h>
+
 #include <xcb/xcb_ewmh.h>
 #include <xcb/xcb_icccm.h>
 
@@ -134,53 +136,13 @@ static void check_position(wui::rect& pos, const wui::system_context& context_ [
     }
 }
 
-#ifdef _WIN32
-# if 0
-static void center_horizontally(wui::rect &pos, const wui::system_context &context [[maybe_unused]] )
-{
-    RECT work_area;
-    SystemParametersInfo(SPI_GETWORKAREA, 0, &work_area, 0);
-    const auto screen_width = work_area.right - work_area.left;
-    const auto width = pos.width();
-    pos.left = work_area.left + (screen_width - width) / 2;
-    pos.right = pos.left + width;
-}
-
-static void center_vertically(wui::rect &pos, const wui::system_context &context [[maybe_unused]] )
-{
-    RECT work_area;
-    SystemParametersInfo(SPI_GETWORKAREA, 0, &work_area, 0);
-    const auto screen_height = work_area.bottom - work_area.top;
-    const auto height = pos.height();
-    pos.top = work_area.top + (screen_height - height) / 2;
-    pos.bottom = pos.top + height;
-}
-#endif
-
-#elif __linux__
-
-#if 0
-static void center_horizontally(wui::rect &pos, const wui::system_context &context_)
-{
-    const auto width = pos.width();
-    pos.left = (context_.screen->width_in_pixels - width) / 2;
-    pos.right = pos.left + width;
-
-}
-
-static void center_vertically(wui::rect &pos, const wui::system_context &context_)
-{
-    const auto height = pos.height();
-    pos.top = (context_.screen->height_in_pixels - height) / 2;
-    pos.bottom = pos.top + height;
-}
-#endif
+#if __linux__
 
 static void remove_window_decorations(wui::system_context &context)
 {
     if (!context.connection)
     {
-        return; // не нужна, так как display не закрыт, не выполнена listener::stop()
+        return;
     }
     std::string mwh = "_MOTIF_WM_HINTS";
     xcb_intern_atom_reply_t *reply = xcb_intern_atom_reply(context.connection,
@@ -232,9 +194,6 @@ static wui::rect get_window_size(wui::system_context &context)
 window::window(std::string_view theme_control_name, std::shared_ptr<i_theme> theme_)
     : context_{ },
     graphic_(context_),
-    controls(),
-    active_control(),
-    caption(),
     position_{ }, parent_position_{ }, normal_position { },
     min_width{ }, min_height{ },
     window_style_(window_style::frame),
@@ -244,15 +203,9 @@ window::window(std::string_view theme_control_name, std::shared_ptr<i_theme> the
     showed_(true), enabled_(true), root_window_(false),
     skip_draw_(false),
     focused_index(0),
-    parent_(),
-    my_control_sid(), my_plain_sid(),
-    transient_window(), docked_(false), docked_control(),
-    subscribers_(),
+    docked_(false),
     moving_mode_(moving_mode::none),
     x_click{ 0 }, y_click{ 0 },
-    close_callback(),
-    control_callback(),
-    default_push_control(),
     switch_lang_button(std::make_shared<button>(locale(tcn, cl_switch_lang), std::bind(&window::switch_lang, this), button_view::image, theme_image(ti_switch_lang), 24, button::tc_tool)),
     switch_theme_button(std::make_shared<button>(locale(tcn, cl_light_theme), std::bind(&window::switch_theme, this), button_view::image, theme_image(ti_switch_theme), 24, button::tc_tool)),
     pin_button(std::make_shared<button>(locale(tcn, cl_pin), std::bind(&window::pin, this), button_view::image, theme_image(ti_pin), 24, button::tc_tool)),
@@ -347,8 +300,7 @@ void window::remove_control(std::shared_ptr<i_control> control)
 
 void window::bring_to_front(std::shared_ptr<i_control> control)
 {
-    auto size = controls.size();
-    if (size > 1)
+    if (controls.size() > 1)
     {
         auto it = std::find(controls.begin(), controls.end(), control);
         if (it != controls.end())
@@ -610,9 +562,9 @@ void window::receive_plain_events(const event &ev)
 {
     if ((ev.type & event_type::internal) && ev.internal_event_.type == wui::internal_event_type::size_changed)
     {
-        auto w = ev.internal_event_.x, h = ev.internal_event_.y;
         if (docked_)
         {
+            const auto w = ev.internal_event_.x, h = ev.internal_event_.y;
             const auto left = (w - position_.width()) / 2;
             const auto top = (h - position_.height()) / 2;
 
@@ -625,6 +577,43 @@ void window::receive_plain_events(const event &ev)
     }
 
     send_event_to_plains(ev);
+}
+
+void window::set_tw_preferred_position(const int32_t width__, const int32_t height__)
+{
+    auto tw = get_transient_window();
+    if (!tw)
+    {
+        return;
+    }
+
+    if (!is_physical_window())
+    {
+        auto pos = position_;
+        if (width__ > 0 && height__ > 0)
+        {
+            pos.resize(width__, height__);
+        }
+        pos.put(
+            (tw->position().width() - pos.width()) / 2,
+            (tw->position().height() - pos.height()) / 2
+        );
+        set_position(pos);
+        return;
+    }
+    wui::rect tw_pos = tw->position();
+    if (tw_pos.width() > 0 && tw_pos.height() > 0)
+    {
+        auto pos = position_;
+        if (width__ > 0 && height__ > 0)
+        {
+            pos.resize(width__, height__);
+        }
+        const int32_t left = tw_pos.left + (tw_pos.width() - pos.width()) / 2;
+        const int32_t top = tw_pos.top + (tw_pos.height() - pos.height()) / 2;
+        pos.put(left, top);
+        set_position(pos);
+    }
 }
 
 void window::set_position(const rect& position__)
@@ -686,14 +675,17 @@ void window::set_position(const rect& position__)
     }
 
     auto left = position___.left;
-    if (left == -1)
-    {
-        left = (parent_position_.width() - position___.width()) / 2;
-    }
     auto top = position___.top;
-    if (top == -1)
+    if (!docked_) // docked pos are set receive_plain_events()
     {
-        top = (parent_position_.height() - position___.height()) / 2;
+        if (left == -1)
+        {
+            left = (parent_position_.width() - position___.width()) / 2;
+        }
+        if (top == -1)
+        {
+            top = (parent_position_.height() - position___.height()) / 2;
+        }
     }
 
     skip_draw_ = true;
@@ -899,9 +891,12 @@ void window::enable()
     enabled_ = true;
 
 #ifdef _WIN32
-    EnableWindow(context_.hwnd, TRUE);
-    SetWindowPos(context_.hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_SHOWWINDOW | SWP_NOSIZE | SWP_NOMOVE);
-    SetWindowPos(context_.hwnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_SHOWWINDOW | SWP_NOSIZE | SWP_NOMOVE);
+    if (context_.hwnd)
+    {
+        EnableWindow(context_.hwnd, TRUE);
+        SetWindowPos(context_.hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_SHOWWINDOW | SWP_NOSIZE | SWP_NOMOVE);
+        SetWindowPos(context_.hwnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_SHOWWINDOW | SWP_NOSIZE | SWP_NOMOVE);
+    }
 #endif
 }
 
@@ -910,7 +905,10 @@ void window::disable()
     enabled_ = false;
 
 #ifdef _WIN32
-    EnableWindow(context_.hwnd, FALSE);
+    if (context_.hwnd)
+    {
+        EnableWindow(context_.hwnd, FALSE);
+    }
 #endif
 }
 
@@ -1040,12 +1038,14 @@ void window::expand()
     {
         if ((window_style_ & window_style::title_showed) && (mi.dwFlags & MONITORINFOF_PRIMARY)) // normal window maximization
         {
+            window_state_ = window_state::maximized;
             RECT work_area;
             SystemParametersInfo(SPI_GETWORKAREA, 0, &work_area, 0);
             SetWindowPos(context_.hwnd, NULL, work_area.left, work_area.top, work_area.right, work_area.bottom, NULL);
         }
         else // expand to full screen
         {
+            window_state_ = window_state::fullscreen;
             SetWindowPos(context_.hwnd,
                 HWND_TOP,
                 mi.rcMonitor.left, mi.rcMonitor.top,
@@ -1062,11 +1062,12 @@ void window::expand()
 
     if (window_style_ & window_style::title_showed) // normal window maximization
     {
-        change_style(net_wm_state, 1, net_wm_state_maximized_vert);
-        change_style(net_wm_state, 1, net_wm_state_maximized_horz);
+        window_state_ = window_state::maximized;
+        change_style(net_wm_state, 1, net_wm_state_maximized_vert, net_wm_state_maximized_horz);
     }
     else // fullscreen
     {
+        window_state_ = window_state::fullscreen;
         change_style(net_wm_state, 1, net_wm_state_fullscreen);
     }
 #endif
@@ -1100,6 +1101,7 @@ void window::normal()
             return;
         }
     }
+    window_state_ = window_state::normal;
 
 #ifdef _WIN32
     SetWindowPos(context_.hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_SHOWWINDOW | SWP_NOSIZE | SWP_NOMOVE);
@@ -1109,15 +1111,14 @@ void window::normal()
 #elif __linux__
     if (context_.connection)
     {
-        change_style(net_wm_state, 0, net_wm_state_maximized_vert);
-        change_style(net_wm_state, 0, net_wm_state_maximized_horz);
+        change_style(net_wm_state, 0, net_wm_state_maximized_vert, net_wm_state_maximized_horz);
         change_style(net_wm_state, 0, net_wm_state_fullscreen);
 
         /// Bring window to top
         change_style(net_wm_state, 1, net_wm_state_above);
         change_style(net_wm_state, 0, net_wm_state_above);
 
-        xcb_client_message_event_t event = { 0 };
+        xcb_client_message_event_t event{ };
 
         event.window = context_.wnd;
         event.response_type = XCB_CLIENT_MESSAGE;
@@ -1125,7 +1126,8 @@ void window::normal()
         event.format = 32;
         event.data.data32[0] = XCB_ICCCM_WM_STATE_NORMAL;
 
-        xcb_send_event(context_.connection, false, context_.screen->root, XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT | XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY, (const char*)&event);
+        xcb_send_event(context_.connection, false, context_.screen->root,
+            XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT | XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY, (const char*)&event);
         xcb_flush(context_.connection);
     }
 #endif
@@ -1135,7 +1137,8 @@ void window::normal()
     if (!normal_position.is_null())
     {
 #ifdef _WIN32
-        SetWindowPos(context_.hwnd, NULL, normal_position.left, normal_position.top, normal_position.width(), normal_position.height(), NULL);
+        SetWindowPos(context_.hwnd, NULL, normal_position.left, normal_position.top,
+            normal_position.width(), normal_position.height(), NULL);
 #elif __linux__
         uint32_t values[] = { static_cast<uint32_t>(normal_position.left),
             static_cast<uint32_t>(normal_position.top),
@@ -1165,6 +1168,16 @@ void window::normal()
 
 window_state window::state() const
 {
+#ifdef __linux__
+    if (window_state_ == window_state::minimized) // wm not send properties: restore state
+    {
+        if (!wm_state_hidden || check_wm_state(wm_state_hidden)) // check real state
+        {
+            return window_state::minimized;
+        }
+        return prev_window_state_;
+    }
+#endif
     return window_state_;
 }
 
@@ -1182,7 +1195,7 @@ void window::set_caption(std::string_view caption_)
             set_wm_name(caption_);
         }
 #endif
-        redraw({ 0, 0, position_.width(), caption_height() }, true); // 30
+        redraw({ 0, 0, position_.width(), caption_height(window_style_) }, true);
     }
 }
 
@@ -1217,7 +1230,7 @@ void window::set_style(window_style style)
 #elif __linux__
     update_window_style();
 
-    redraw({ 0, 0, position_.width(), caption_height() }, true); // 30
+    redraw({ 0, 0, position_.width(), caption_height() }, true);
 #endif
 }
 
@@ -1461,19 +1474,19 @@ void window::send_mouse_event(const mouse_event &ev)
     if (enabled_)
     {
         auto end = controls.rend();
-        for (auto control = controls.rbegin(); control != end; ++control)
+        for (auto it = controls.rbegin(); it != end; ++it)
         {
-            if (*control && (*control)->topmost() && (*control)->showed() && (*control)->position().in(ev.x, ev.y))
+            if (*it && (*it)->topmost() && (*it)->showed() && (*it)->position().in(ev.x, ev.y))
             {
-                return send_mouse_event_to_control(*control, ev);
+                return send_mouse_event_to_control(*it, ev);
             }
         }
 
-        for (auto control = controls.rbegin(); control != end; ++control)
+        for (auto it = controls.rbegin(); it != end; ++it)
         {
-            if (*control && (*control)->showed() && (*control)->position().in(ev.x, ev.y))
+            if (*it && (*it)->showed() && (*it)->position().in(ev.x, ev.y))
             {
-                return send_mouse_event_to_control(*control, ev);
+                return send_mouse_event_to_control(*it, ev);
             }
         }
     }
@@ -1481,7 +1494,7 @@ void window::send_mouse_event(const mouse_event &ev)
     {
         for (auto &control : controls)
         {
-            if (control && control->position().in(ev.x, ev.y) && control == docked_control)
+            if (control->position().in(ev.x, ev.y) && control == docked_control)
             {
                 return send_mouse_event_to_control(control, ev);
             }
@@ -1848,6 +1861,22 @@ std::shared_ptr<window> window::get_transient_window()
     return transient_window.lock();
 }
 
+rect window::get_parent_position()
+{
+    if (parent_.expired() || transient_window.expired())
+    {
+        return {};
+    }
+    auto w = transient_window.lock();
+    if (w)
+    {
+        return w->position();
+
+    }
+    w = parent_.lock();
+    return w ? w->position() : rect{};
+}
+
 bool window::init(std::string_view caption_, const rect& position__,
     window_style style, std::function<void(void)> close_callback_)
 {
@@ -1910,8 +1939,8 @@ bool window::init(std::string_view caption_, const rect& position__,
 
             if (tw_pos.width() > 0 && tw_pos.height() > 0)
             {
-                left = tw_pos.left + ((tw_pos.width() - position_.width()) / 2);
-                top = tw_pos.top + ((tw_pos.height() - position_.height()) / 2);
+                left = tw_pos.left + (tw_pos.width() - position_.width()) / 2;
+                top = tw_pos.top + (tw_pos.height() - position_.height()) / 2;
             }
             else
             {
@@ -1933,6 +1962,11 @@ bool window::init(std::string_view caption_, const rect& position__,
             position_.put(left, top);
 
             transient_window_->disable();
+            if (tw)
+            {
+                tw->enabled_ = false; // disable input
+            }
+            set_topmost(true);
         }
     }
 
@@ -2132,6 +2166,7 @@ bool window::init(std::string_view caption_, const rect& position__,
     }
 
     exit_ = false;
+    reset_cursor();
 
     if (listener__)
     {
@@ -2422,7 +2457,9 @@ LRESULT CALLBACK window::wnd_proc(HWND hwnd, UINT message, WPARAM w_param, LPARA
             reset_cursor();
 
             if (!wnd->graphic_.init(get_screen_size(wnd->context_), theme_color(wnd->tcn, tv_background, wnd->theme_)))
+            {
                 std::cerr << wnd->graphic_.get_error().str() << std::endl;
+            }
 
             auto listener__ = framework::get_listener();
             if (listener__)
@@ -2438,6 +2475,20 @@ LRESULT CALLBACK window::wnd_proc(HWND hwnd, UINT message, WPARAM w_param, LPARA
             wnd->send_internal(internal_event_type::window_created, 0, 0);
         }
         break;
+
+        case WM_DISPLAYCHANGE:
+        {
+            //const int bpp = (int)w_param;
+            //const int newWidth = LOWORD(l_param);
+            //const int newHeight = HIWORD(l_param);
+            window* wnd = reinterpret_cast<window*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
+            if (!wnd->graphic_.init(get_screen_size(wnd->context_), theme_color(wnd->tcn, tv_background, wnd->theme_)))
+            {
+                std::cerr << wnd->graphic_.get_error().str() << std::endl;
+            }
+        }
+        break;
+
 #if 0
         case WM_DPICHANGED:
         {
@@ -2879,6 +2930,7 @@ LRESULT CALLBACK window::wnd_proc(HWND hwnd, UINT message, WPARAM w_param, LPARA
             return DefWindowProc(hwnd, message, w_param, l_param);
         break;
         case WM_KEYDOWN:
+        case WM_SYSKEYDOWN: // vk_alt
         {
             window* wnd = reinterpret_cast<window*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
 
@@ -3538,7 +3590,8 @@ void window::process_events(xcb_generic_event_t &e)
 
                 auto property_reply = xcb_get_property_reply(context_.connection, get_prop_cookie, nullptr);
 
-                if (property_reply->type == XCB_ATOM_ATOM && xcb_get_property_value_length(property_reply) > 0)
+                if (property_reply && property_reply->type == XCB_ATOM_ATOM
+                    && xcb_get_property_value_length(property_reply) > 0)
                 {
                     auto val = (xcb_atom_t*)xcb_get_property_value(property_reply);
 
@@ -3662,6 +3715,14 @@ void window::init_atoms()
     net_wm_state = net_wm_state_reply->atom;
     free(net_wm_state_reply);
 
+    auto net_wm_state_hidden = xcb_intern_atom_reply(context_.connection,
+        xcb_intern_atom(context_.connection, 0, 20, "_NET_WM_STATE_HIDDEN"), nullptr);
+    if (net_wm_state_hidden)
+    {
+        wm_state_hidden = net_wm_state_hidden->atom;
+        free(net_wm_state_hidden);
+    }
+
     auto net_wm_state_focused_reply = xcb_intern_atom_reply(context_.connection,
         xcb_intern_atom(context_.connection, 0, 21, "_NET_WM_STATE_FOCUSED"), nullptr);
     net_wm_state_focused = net_wm_state_focused_reply->atom;
@@ -3733,22 +3794,25 @@ void window::send_destroy_event()
     xcb_flush(context_.connection);
 }
 
-void window::change_style(xcb_atom_t type, xcb_atom_t action, xcb_atom_t style) noexcept
+void window::change_style(xcb_atom_t type, xcb_atom_t action,
+    xcb_atom_t style1, xcb_atom_t style2) noexcept
 {
     if (!context_.connection || !context_.wnd)
     {
         return;
     }
-    xcb_client_message_event_t event = { 0 };
+    xcb_client_message_event_t event{ };
 
     event.window = context_.wnd;
     event.response_type = XCB_CLIENT_MESSAGE;
     event.type = type;
     event.format = 32;
     event.data.data32[0] = action;
-    event.data.data32[1] = style;
+    event.data.data32[1] = style1;
+    event.data.data32[2] = style2;
 
-    xcb_send_event(context_.connection, false, context_.screen->root, XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT | XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY, (const char*)&event);
+    xcb_send_event(context_.connection, false, context_.screen->root,
+        XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT | XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY, (const char*)&event);
     xcb_flush(context_.connection);
 }
 
@@ -3766,6 +3830,40 @@ void window::update_window_style()
     {
         change_style(net_active_window, 0, 0);
     }
+}
+
+bool window::check_wm_state(const xcb_atom_t atom) const
+{
+    constexpr long max_length = 1024;
+    Atom actual_type;
+    int actual_format;
+    unsigned long bytes_after, num_states = 0;
+    Atom* states = nullptr;
+
+    if (Success == XGetWindowProperty(
+        context_.display,
+        context_.wnd,
+        net_wm_state,
+        0l,  //no offset
+        max_length,
+        False, //do not delete
+        XA_ATOM, //requested type #define 	XA_ATOM   ((Atom) 4)
+        &actual_type, //atom identifier that defines the actual type
+        &actual_format, //actual format of the property
+        &num_states, //actual number of items stored in the states data
+        &bytes_after, //number of bytes remaining on a partial read
+        (unsigned char**)&states //data in the specified format
+    ))
+    {
+        for (unsigned long i = 0; i < num_states; ++i)
+        {
+            if (states[i] == atom) // atom : wm_state_hidden, net_wm_state_maximized_vert
+            {
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 void window::set_wm_name(std::string_view caption)
