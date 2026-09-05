@@ -58,7 +58,10 @@ scroll::~scroll()
 
 void scroll::draw(graphic &gr, const rect& paint_rect [[maybe_unused]] )
 {
-    if (!showed_ || position_.is_null())
+    if (!showed_ || (orientation_ == orientation::vertical
+        && position_.height() < full_scrollbar_size * 2)
+        || (orientation_ == orientation::horizontal
+            && position_.width() < full_scrollbar_size * 2))
     {
         return;
     }
@@ -188,11 +191,14 @@ void scroll::show()
 
 void scroll::hide()
 {
-    showed_ = false;
-    auto parent__ = parent_.lock();
-    if (parent__)
+    if (showed_)
     {
-        parent__->redraw(position(), true);
+        showed_ = false;
+        auto parent__ = parent_.lock();
+        if (parent__)
+        {
+            parent__->redraw(position(), true);
+        }
     }
 }
 
@@ -419,9 +425,9 @@ void scroll::draw_arrow_up(graphic& gr, const rect& button_pos)
     constexpr int h = 4;
     int w = 8;
 
-    for (int j = 0; j != h; ++j)
+    for (int j = 0; j < h; ++j)
     {
-        for (int i = 0; i != w; ++i)
+        for (int i = 0; i < w; ++i)
         {
             gr.draw_pixel({ button_pos.left + 3 + j + i, button_pos.top + 8 - j }, color);
         }
@@ -436,9 +442,9 @@ void scroll::draw_arrow_left(graphic& gr, const rect& button_pos)
     constexpr int w = 4;
     int h = 8;
 
-    for (int j = 0; j != w; ++j)
+    for (int j = 0; j < w; ++j)
     {
-        for (int i = 0; i != h; ++i)
+        for (int i = 0; i < h; ++i)
         {
             gr.draw_pixel({ button_pos.left + 8 - j, button_pos.top + 3 + i + j }, color);
         }
@@ -453,9 +459,9 @@ void scroll::draw_arrow_down(graphic& gr, const rect& button_pos)
     constexpr int h = 4;
     int w = 8;
 
-    for (int j = 0; j != h; ++j)
+    for (int j = 0; j < h; ++j)
     {
-        for (int i = 0; i != w; ++i)
+        for (int i = 0; i < w; ++i)
         {
             gr.draw_pixel({ button_pos.left + 3 + j + i, button_pos.top + 5 + j }, color);
         }
@@ -470,9 +476,9 @@ void scroll::draw_arrow_right(graphic& gr, const rect& button_pos)
     constexpr int w = 4;
     int h = 8;
 
-    for (int j = 0; j != w; ++j)
+    for (int j = 0; j < w; ++j)
     {
-        for (int i = 0; i != h; ++i)
+        for (int i = 0; i < h; ++i)
         {
             gr.draw_pixel({ button_pos.left + 5 + j, button_pos.top + 3 + i + j }, color);
         }
@@ -482,7 +488,7 @@ void scroll::draw_arrow_right(graphic& gr, const rect& button_pos)
 
 void scroll::move_slider(const int32_t v)
 {
-    if (scroll_interval <= 0 || v == slider_click_pos) // < ?
+    if (scroll_interval <= 0 || v == slider_click_pos)
     {
         return;
     }
@@ -590,17 +596,17 @@ void scroll::calc_scrollbar_params(rect* bar_rect, rect* up_button_rect, rect* d
 
 void scroll::calc_scroll_interval()
 {
-    if (area == 0 || position_.is_null())
+    if (area == 0 || position_.is_hide())
     {
         return;
     }
 
-    if (orientation_ == orientation::vertical && position_.height() > full_scrollbar_size * 2)
+    if (orientation_ == orientation::vertical && position_.height() >= full_scrollbar_size * 2)
     {
         const auto h_pos = position_.height() - full_scrollbar_size * 2;
         scroll_interval = h_pos > 0 ? (area + position_.height()) / h_pos : 0;
     }
-    else if (orientation_ == orientation::horizontal && position_.width() > full_scrollbar_size * 2)
+    else if (orientation_ == orientation::horizontal && position_.width() >= full_scrollbar_size * 2)
     {
         const auto w_pos = position_.width() - full_scrollbar_size * 2;
         scroll_interval = w_pos > 0 ? (area + position_.width()) / w_pos : 0;
