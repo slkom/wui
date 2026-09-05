@@ -27,7 +27,8 @@ enum class window_state
     normal,
     minimized,
     maximized,
-    pinned
+    fullscreen
+    //, pinned
 };
 
 enum class window_control
@@ -107,6 +108,13 @@ public:
     void set_style(window_style style);
     void set_min_size(int32_t width, int32_t height);
 
+    /// <summary>
+    /// set the preferred window position using the `transient window` position
+    /// </summary>
+    /// <param name="width__"> new width </param>
+    /// <param name="height__">new height </param>
+    void set_tw_preferred_position(const int32_t width__, const int32_t height__);
+
     void set_transient_for(std::shared_ptr<window> window_, bool docked = true);
 
     /// Window state methods
@@ -164,6 +172,7 @@ public:
     {
         return theme_;
     }
+    [[nodiscard]] rect get_parent_position();
 
 public:
     /// Control name in theme / locale
@@ -285,19 +294,20 @@ private:
 
 #elif __linux__
 
-    xcb_atom_t wm_protocols_event,
-        wm_delete_msg,
-        wm_change_state,
-        net_wm_state,
-        net_wm_state_focused,
-        net_wm_state_above,
-        net_wm_state_skip_taskbar,
-        net_wm_name,
-        utf8_string,
-        net_active_window,
-        net_wm_state_fullscreen,
-        net_wm_state_maximized_vert, net_wm_state_maximized_horz,
-        net_wm_moveresize;
+    xcb_atom_t wm_protocols_event{ },
+        wm_delete_msg{ },
+        wm_change_state{ },
+        net_wm_state{ },
+        net_wm_state_focused{ },
+        net_wm_state_above{ },
+        net_wm_state_skip_taskbar{ },
+        net_wm_name{ },
+        utf8_string{ },
+        net_active_window{ },
+        net_wm_state_fullscreen{ },
+        net_wm_state_maximized_vert{ }, net_wm_state_maximized_horz{ },
+        wm_state_hidden{ },
+        net_wm_moveresize{ };
 
     time_t prev_button_click;
 
@@ -311,9 +321,12 @@ private:
 
     void send_destroy_event();
 
-    void change_style(xcb_atom_t type, xcb_atom_t action, xcb_atom_t style) noexcept;
+    void change_style(xcb_atom_t type, xcb_atom_t action,
+        xcb_atom_t style1, xcb_atom_t style2 = 0) noexcept;
 
     void update_window_style();
+
+    bool check_wm_state(const xcb_atom_t atom) const;
 
     void set_wm_name(std::string_view caption);
 
