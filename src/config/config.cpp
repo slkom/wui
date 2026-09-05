@@ -50,7 +50,7 @@ error get_error()
 {
     if (instance)
     {
-        return instance->get_error();
+        return std::move(instance->get_error());
     }
     return {};
 }
@@ -93,9 +93,9 @@ std::string get_string(std::string_view section, std::string_view entry, std::st
 {
     if (instance)
     {
-        return instance->get_string(section, entry, default_);
+        return std::move(instance->get_string(section, entry, default_));
     }
-    return "";
+    return {};
 }
 
 void set_string(std::string_view section, std::string_view entry, std::string_view value)

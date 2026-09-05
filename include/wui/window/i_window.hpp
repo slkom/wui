@@ -43,6 +43,7 @@ enum class window_style : uint32_t
 
     frame = title_showed | close_button | expand_button | minimize_button | resizable | moving,
     dialog = title_showed | close_button | moving | border_all,
+    dialog_topmost = dialog | topmost,
     pinned = pin_button | close_button | resizable | moving
 };
 inline constexpr window_style operator|(const window_style l, const window_style r)

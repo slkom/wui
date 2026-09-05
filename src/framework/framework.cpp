@@ -65,7 +65,6 @@ bool init()
     if (!ok)
     {
         std::cerr << "framework::init : listener init(). " << listener_->get_error().str() << std::endl;
-        // TODO
         // error err(error_type::system_error, "framework::init : listener init()");
         return false;
     }

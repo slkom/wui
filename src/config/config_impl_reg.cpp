@@ -291,7 +291,7 @@ std::string config_impl_reg::get_string(std::string_view section,
         RegCloseKey(hKey);
     }
 
-    return out;
+    return std::move(out);
 }
 
 void config_impl_reg::set_string(std::string_view section,

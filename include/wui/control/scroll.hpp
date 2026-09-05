@@ -106,6 +106,9 @@ public:
     static constexpr const char *tv_slider = "slider";
     static constexpr const char *tv_slider_acive = "slider_active";
 
+    static constexpr const int32_t tiny_scrollbar_size = 4;
+    static constexpr const int32_t full_scrollbar_size = 14;
+
 private:
     std::string tcn; // control name
     std::shared_ptr<i_theme> theme_;
@@ -147,9 +150,6 @@ private:
     int32_t slider_click_pos;
 
     int32_t title_height;
-
-    static constexpr const int32_t tiny_scrollbar_size = 3;
-    static constexpr const int32_t full_scrollbar_size = 14;
 
     void draw_arrow_up(graphic& gr, const rect& button_pos);
     void draw_arrow_left(graphic& gr, const rect& button_pos);

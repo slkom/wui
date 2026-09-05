@@ -21,8 +21,7 @@ namespace framework
 {
 extern std::shared_ptr<listener> get_listener();
 
-framework_lin_impl::framework_lin_impl()
-    : started_(false)
+framework_lin_impl::framework_lin_impl() : started_(false)
 {
 }
 
@@ -45,7 +44,9 @@ void framework_lin_impl::run()
 
     auto listener__ = framework::get_listener();
     if (listener__)
+    {
         listener__->stop(); // не обязательно, но помогает отладке
+    }
 }
 
 // call: X11 listener::thread

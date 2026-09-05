@@ -125,7 +125,7 @@ void locale_impl::load_file(std::string_view file_name)
 {
     err.reset();
 
-    std::ifstream f(wui::real_path(file_name));
+    std::ifstream f(std::move(wui::real_path(file_name)));
     if (!f)
     {
         err.set(error_type::file_not_found, "locale_impl::load_file()",

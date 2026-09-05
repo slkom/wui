@@ -26,7 +26,6 @@ enum class event_type : uint32_t
     all = system | mouse | keyboard | internal
 };
 
-// event_type b = wui::event_type::keyboard | wui::event_type::system;
 inline constexpr event_type operator|(const event_type l, const event_type r)
 {
     return static_cast <event_type> (static_cast <uint32_t> (l) | static_cast <uint32_t> (r));
@@ -37,17 +36,6 @@ inline constexpr bool operator&(const event_type l, const event_type r)
 {
     return 0 != (static_cast <uint32_t> (l) & static_cast <uint32_t> (r));
 }
-/*
-
-inline event_type test1(const event_type e1, const event_type e2, const event_type e3)
-{
-    return e1 | e2 | e3;
-}
-inline bool test2(const event_type e1, const event_type e2)
-{
-    return (e1 & e2);
-}
-*/
 
 struct event
 {

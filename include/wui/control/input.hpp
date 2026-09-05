@@ -83,7 +83,22 @@ public:
 
 public:
     /// Input's interface
-    void set_text(std::string_view text);
+    template <bool t_redraw = true, bool t_callback = true>
+    void set_text(std::string_view text__)
+    {
+        update_lines(text__);
+        reset_state();
+        if constexpr (t_callback)
+        {
+            if (change_callback)
+                change_callback();
+        }
+        if constexpr (t_redraw)
+        {
+            redraw();
+        }
+    }
+
     std::string text() const;
     [[nodiscard]] int32_t get_font_size() const;
 
@@ -178,6 +193,7 @@ private:
     void stop_auto_scroll();
     void on_auto_scroll();
 
+    void remove_focus();
     void receive_control_events(const event &ev);
     void receive_plain_events(const event &ev);
 

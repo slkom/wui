@@ -60,7 +60,7 @@ bool listener::init()
     context_.display = XOpenDisplay(nullptr); //TODO: display_name.c_str()
     if (!context_.display)
     {
-        err.set(error_type::system_error, "listener::start()", "Can't make the connection to X server");
+        err.set(error_type::system_error, "listener::init()", "Can't make the connection to X server");
         return false;
     }
 
@@ -72,7 +72,7 @@ bool listener::init()
         context_.display = nullptr;
 
         err.set(error_type::system_error,
-            "listener::start()", "Could not cast the Display object to an XCBConnection object.");
+            "listener::init()", "Could not cast the Display object to an XCBConnection object.");
         return false;
     }
 
@@ -98,13 +98,17 @@ void listener::stop()
 {
     started = false;
     if (thread.joinable())
+    {
         thread.join();
+        // assert(windows.empty());
+        windows.clear();
+    }
 
     if (context_.display)
     {
-        system_context context = context_;
+        Display* display = context_.display;
         context_.clear();
-        XCloseDisplay(context.display);
+        XCloseDisplay(display);
     }
 }
 
@@ -121,9 +125,6 @@ void listener::process_events()
     {
         xcb_window_t w = e->pad[2];
 
-        // макрос <xcb_event.h>
-        // XCB_EVENT_RESPONSE_TYPE(e) -> type&0x7f : ~0x80 = 0x7F
-        //switch (e->response_type & ~0x80)
         switch (e->response_type & 0x7f)
         {
             case XCB_EXPOSE:
@@ -152,8 +153,8 @@ void listener::process_events()
             {
                 w.created = true;
                 event ev;
-                ev.type = wui::event_type::internal;
-                ev.internal_event_.type = wui::internal_event_type::window_created;
+                ev.type = event_type::internal;
+                ev.internal_event_.type = internal_event_type::window_created;
                 w.window_->receive_control_events(ev);
             }
             w.window_->process_events(*e);
@@ -167,15 +168,6 @@ error listener::get_error() const
     return err;
 }
 
-// статические удаляются в достаточно произвольном порядке, находясь в разных единицах трансляции.
-// что вызывает ситуацию удаления instance до удаления последнего окна...
-// (в win32 это случится, в X11 ?)
-// https://evgenykislov.com/cpp-styleguide/cpp-styleguide-archive/cpp-styleguide-012023/
-//listener& get_listener()
-//{
-//    static listener instance;
-//    return instance;
-//}
 #endif
 
 }

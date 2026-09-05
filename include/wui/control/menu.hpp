@@ -25,7 +25,6 @@ namespace wui
 {
 
 class image;
-//class menu;
 
 enum class menu_item_state
 {
@@ -46,11 +45,11 @@ struct menu_item_data_
 
     std::string hotkey;
 
-    std::shared_ptr<image> image_{ };
+    std::shared_ptr<image> image_;
 
     std::vector<T> children;
 
-    std::function<void(int32_t)> click_callback{ };
+    std::function<void(int32_t)> click_callback;
 
     inline bool operator==(int32_t id_)
     {
@@ -82,8 +81,8 @@ struct menu_item_data : public menu_item_data_ < menu_item_data >
 
 struct menu_item : public menu_item_data_ < menu_item >
 {
-    int32_t level;
-    menu_item_state prev_state;
+    int32_t level{};
+    menu_item_state prev_state{};
 
     inline menu_item& operator=(const menu_item& item)
     {

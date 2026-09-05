@@ -82,7 +82,6 @@ private:
     error err;
 
     void start();
-
     void process_events();
 };
 

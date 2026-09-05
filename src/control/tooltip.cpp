@@ -51,7 +51,7 @@ void tooltip::draw(graphic &gr, const rect&)
         theme_dimension(tcn, tv_border_width, theme_),
         theme_dimension(tcn, tv_round, theme_));
 
-    auto font_ = theme_font(tcn, tv_font, theme_);
+    auto font_ = std::move(theme_font(tcn, tv_font, theme_));
 
     auto text_indent = theme_dimension(tcn, tv_text_indent, theme_);
 
@@ -188,7 +188,7 @@ void tooltip::update_size()
         return;
     }
 
-    auto font_ = theme_font(tcn, tv_font, theme_);
+    auto font_ = std::move(theme_font(tcn, tv_font, theme_));
 
     auto old_position = position_;
 

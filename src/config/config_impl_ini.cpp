@@ -21,7 +21,7 @@ namespace config
 {
 
 config_impl_ini::config_impl_ini(std::string_view file_name_)
-    : file_name(wui::real_path(file_name_)),
+    : file_name(std::move(wui::real_path(file_name_))),
     values(),
     changed(false)
 {

@@ -56,7 +56,7 @@ void set_default_theme_empty(std::string_view name)
 
 bool set_default_theme_from_name(std::string_view name, error &err)
 {
-    auto theme_params = wui::get_app_theme(name);
+    auto theme_params = std::move(wui::get_app_theme(name));
 
 #ifdef _WIN32
     const bool ok = wui::set_default_theme_from_resource(name, theme_params.resource_id, "JSONS");
@@ -72,7 +72,7 @@ error get_theme_error()
 {
     if (instance)
     {
-        return instance->get_error();
+        return std::move(instance->get_error());
     }
     return {};
 }
