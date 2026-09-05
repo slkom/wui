@@ -38,7 +38,8 @@ inline constexpr bool operator&(const decorations l, const decorations r)
 struct font
 {
     std::string name;
-    int32_t size{ };
+    int32_t size{ 1 };
+
     decorations decorations_{ decorations::normal };
 };
 
