@@ -129,7 +129,7 @@ namespace utf8
     template <typename octet_iterator, typename output_iterator>
     inline output_iterator replace_invalid(octet_iterator start, octet_iterator end, output_iterator out)
     {
-        static const utfchar32_t replacement_marker = utf8::internal::mask16(0xfffd);
+        static const utfchar32_t replacement_marker = static_cast<utfchar32_t>(utf8::internal::mask16(0xfffd));
         return utf8::replace_invalid(start, end, out, replacement_marker);
     }
 
@@ -151,7 +151,7 @@ namespace utf8
     utfchar32_t next(octet_iterator& it, octet_iterator end)
     {
         utfchar32_t cp = 0;
-        internal::utf_error err_code = utf8::internal::validate_next(it, end, cp);
+        internal::utf_error err_code = utf8::internal::decode_next(it, end, cp);
         switch (err_code) {
             case internal::UTF8_OK :
                 break;
@@ -174,6 +174,8 @@ namespace utf8
         internal::utf_error err_code = utf8::internal::validate_next16(it, end, cp);
         if (err_code == internal::NOT_ENOUGH_ROOM)
             throw not_enough_room();
+        else if (err_code != internal::UTF8_OK)
+            throw invalid_utf16(static_cast<utfchar16_t>(*it));
         return cp;
     }
 
@@ -199,11 +201,13 @@ namespace utf8
     }
 
     template <typename octet_iterator, typename distance_type>
-    void advance (octet_iterator& it, distance_type n, octet_iterator end)
+    void advance(octet_iterator& it, distance_type n, octet_iterator end)
     {
         const distance_type zero(0);
-        if constexpr (std::is_signed_v<distance_type>) {
-            if (n < zero) {
+        if constexpr (std::is_signed_v<distance_type>)
+        {
+            if (n < zero)
+            {
                 // backward
                 for (distance_type i = n; i < zero; ++i)
                     utf8::prior(it, end);
@@ -230,11 +234,11 @@ namespace utf8
     octet_iterator utf16to8 (u16bit_iterator start, u16bit_iterator end, octet_iterator result)
     {
         while (start != end) {
-            utfchar32_t cp = utf8::internal::mask16(*start++);
+            utfchar32_t cp = static_cast<utfchar32_t>(utf8::internal::mask16(*start++));
             // Take care of surrogate pairs first
             if (utf8::internal::is_lead_surrogate(cp)) {
                 if (start != end) {
-                    const utfchar32_t trail_surrogate = utf8::internal::mask16(*start++);
+                    const utfchar32_t trail_surrogate = static_cast<utfchar32_t>(utf8::internal::mask16(*start++));
                     if (utf8::internal::is_trail_surrogate(trail_surrogate))
                         cp = (cp << 10) + trail_surrogate + internal::SURROGATE_OFFSET;
                     else
