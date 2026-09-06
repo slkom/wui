@@ -262,11 +262,9 @@ _cairo *primitive_container::get_font(const font& font_, _cairo_surface *surface
         h = font_.size * (font_.size / h);
         cairo_set_font_size(cr, std::ceil(h));
     }
-    fonts[{ {font_.name, std::ceil(h) }, font_.decorations_ }] = cr;
-#else
-    fonts[{ {font_.name, font_.size }, font_.decorations_ }] = cr;
 #endif
 
+    fonts[{ {font_.name, font_.size }, font_.decorations_ }] = cr;
 
     return cr;
 }
