@@ -127,8 +127,8 @@ struct rect
     inline void widen(const int32_t dx, const int32_t dy) noexcept
     {
         left -= dx;
-        top -= dx;
-        right += dy;
+        top -= dy;
+        right += dx;
         bottom += dy;
     }
 
