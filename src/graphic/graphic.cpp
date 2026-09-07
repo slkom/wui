@@ -92,14 +92,21 @@ bool graphic::init(const rect &max_size__, const color background_color_)
 
 #ifdef _WIN32
 
-
     auto wnd_dc = GetDC(context_.hwnd);
 
     mem_dc = CreateCompatibleDC(wnd_dc);
+    if (!mem_dc)
+    {
+        ReleaseDC(context_.hwnd, wnd_dc);
+        err.set(error_type::no_handle, "graphic::init()", "CreateCompatibleDC return null");
+        return false;
+    }
 
     mem_bitmap = CreateCompatibleBitmap(wnd_dc, max_size_.width(), max_size_.height());
     if (!mem_bitmap)
     {
+        DeleteDC(mem_dc);
+        mem_dc = NULL;
         ReleaseDC(context_.hwnd, wnd_dc);
         err.set(error_type::no_handle, "graphic::init()", "CreateCompatibleBitmap returns null");
         return false;
@@ -496,21 +503,28 @@ void graphic::draw_text(const rect &position, std::string_view text_, const colo
 
     cairo_show_text(cr, text__.c_str());
 
-    if (decorations::underline & font__.decorations_)
+    if (font__.decorations_ & (decorations::underline | decorations::strike_out))
     {
+        double y_offset{};
+        cairo_font_extents_t fe;
+        cairo_font_extents(cr, &fe);
+        cairo_set_line_width(cr, fe.height > 15.0 ? fe.height / 15.0 : 1.0);
+
+        if (font__.decorations_ & decorations::underline)
+        {
+            y_offset = fe.descent / 2.0;
+        }
+        else
+        {
+            cairo_text_extents_t tex;
+            cairo_text_extents(cr, "x\0", &tex);
+            y_offset = tex.y_bearing / 2.0; // точнее
+            //const double y_offset = -(fe.ascent * 0.3);
+        }
+
         cairo_text_extents_t te;
         cairo_text_extents(cr, text__.c_str(), &te);
 
-        cairo_font_extents_t fe;
-        cairo_font_extents(cr, &fe);
-
-        double line_thickness = 1.0;
-        if (fe.height > 15.0)
-        {
-            line_thickness = fe.height / 15.0;
-        }
-        cairo_set_line_width(cr, line_thickness);
-        const double y_offset = fe.descent / 2.0;
         cairo_move_to(cr, position.left + te.x_bearing, top + y_offset);
         cairo_line_to(cr, position.left + te.x_bearing + te.x_advance, top + y_offset);
         cairo_stroke(cr);
@@ -603,15 +617,46 @@ void graphic::draw_text_clip(const rect & position, const text_lines_t & lines,
         cairo_clip(cr);
     }
 
+    double y_offset{};
+    if (font__.decorations_ & (decorations::underline | decorations::strike_out))
+    {
+        cairo_font_extents_t fe;
+        cairo_font_extents(cr, &fe);
+        cairo_set_line_width(cr, fe.height > 15.0 ? fe.height / 15.0 : 1.0);
+
+        if (font__.decorations_ & decorations::underline)
+        {
+            y_offset = fe.descent / 2.0;
+        }
+        else
+        {
+            cairo_text_extents_t tex;
+            cairo_text_extents(cr, "x\0", &tex);
+            y_offset = tex.y_bearing / 2.0; // точнее
+            //const double y_offset = -(fe.ascent * 0.3);
+        }
+    }
+
     std::string text;
     for (auto& line : lines)
     {
-        cairo_move_to(cr, position.left + line.rc.left,
-            position.top + line.rc.top + font__.size * 5.0 / 6.0);
+        const auto left = position.left + line.rc.left;
+        const auto top = position.top + line.rc.top + font__.size * 5.0 / 6.0;
+        cairo_move_to(cr, left, top);
         text = line.str; /// Workaround to prevent crashes
         text += '\0';
 
         cairo_show_text(cr, text.c_str());
+
+        if (font__.decorations_ & (decorations::underline | decorations::strike_out))
+        {
+            cairo_text_extents_t te;
+            cairo_text_extents(cr, text.c_str(), &te);
+
+            cairo_move_to(cr, left + te.x_bearing, top + y_offset);
+            cairo_line_to(cr, left + te.x_bearing + te.x_advance, top + y_offset);
+            cairo_stroke(cr);
+        }
     }
 
     if (clip_)
@@ -627,13 +672,6 @@ void graphic::draw_rect(const rect& position, const color fill_color)
     RECT position_rect = { position.left, position.top, position.right, position.bottom };
     FillRect(mem_dc, &position_rect, pc.get_brush(fill_color));
 #elif __linux__
-    //assert(surface);
-    //if (!surface)
-    //{
-    //    err.set(error_type::no_handle, "graphic::draw_rect()", "No cairo surface");
-    //    return;
-    //}
-
     auto pos = position;
     if (pos.left > pos.right)
     {
@@ -844,7 +882,8 @@ void graphic::draw_buffer(const rect& position,
 
     image->data = buffer;
 
-    xcb_image_put(context_.connection, pixmap, pc.get_gc(background_color), image, 0, 0, 0);
+    xcb_image_put(context_.connection, pixmap,
+        pc.get_gc(background_color), image, 0, 0, 0);
 
     xcb_image_destroy(image);
 
