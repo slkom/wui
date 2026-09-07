@@ -13,107 +13,139 @@
 namespace wui
 {
 
-//! Cairo. RGBA is opaque black (0.0, 0.0, 0.0, 1.0).
-//! Gdiplus. ARGB is opaque black (255, 0.0, 0.0, 0.0)
-//! wui *.json use BGRA format: new opaque and alpha
+/// Cairo. RGBA is opaque black (0.0, 0.0, 0.0, 1.0).
+/// Gdiplus. ARGB is opaque black (255, 0.0, 0.0, 0.0)
+/// wui *.json use BGRA format: new opaque and alpha
 
-typedef uint32_t color; //! RGBA
+typedef uint32_t color; /// RGBA
 
-//! make color RGBA, A=255
-static constexpr inline color make_color(const uint8_t red, const uint8_t green, const uint8_t blue) noexcept
+/// make color RGBA, A = 0xFF
+constexpr color make_color(const uint8_t red, const uint8_t green, const uint8_t blue) noexcept
 {
-    return (0xFF000000 | red | (static_cast<uint16_t>(green) << 8)) | (static_cast<uint32_t>(blue) << 16);
+    return (0xFF000000U | red | (static_cast<uint16_t>(green) << 8)) | (static_cast<uint32_t>(blue) << 16);
 }
 
-//! make color RGBA
-static constexpr inline color make_color(const uint8_t red, const uint8_t green, const uint8_t blue, const uint8_t alpha) noexcept
+/// make color RGBA
+constexpr color make_color(const uint8_t red, const uint8_t green, const uint8_t blue, const uint8_t alpha) noexcept
 {
     return (red | (static_cast<uint16_t>(green) << 8)) | (static_cast<uint32_t>(blue) << 16) | (static_cast<uint32_t>(alpha) << 24);
 }
 
-//! wui *.json use BGRA format
-//! make color BGRA, A=255
-static constexpr inline color make_color_bgra(const uint8_t red, const uint8_t green, const uint8_t blue) noexcept
+/// wui *.json use BGRA format
+/// make color BGRA, A = 0xFF
+constexpr color make_color_bgra(const uint8_t red, const uint8_t green, const uint8_t blue) noexcept
 {
-    return (0xFF000000 | blue | (static_cast<uint16_t>(green) << 8)) | (static_cast<uint32_t>(red) << 16);
+    return (0xFF000000U | blue | (static_cast<uint16_t>(green) << 8)) | (static_cast<uint32_t>(red) << 16);
 }
 
-//! make color BGRA
-static constexpr inline color make_color_bgra(const uint8_t red, const uint8_t green, const uint8_t blue, const uint8_t alpha) noexcept
+/// make color BGRA
+constexpr color make_color_bgra(const uint8_t red, const uint8_t green, const uint8_t blue, const uint8_t alpha) noexcept
 {
     return (blue | (static_cast<uint16_t>(green) << 8)) | (static_cast<uint32_t>(red) << 16) | (static_cast<uint32_t>(alpha) << 24);
 }
 
-static constexpr inline uint32_t conv_bgra_to_rgba(const color bgra) noexcept
+constexpr uint32_t conv_bgra_to_rgba(const color bgra) noexcept
 {
-    return ((bgra >> 16) & 0xFF) | (bgra & 0xFF00) | (bgra & 0xFF) | (bgra & 0xFF000000);
+    return ((bgra & 0x000000FFU) << 16) | (bgra & 0x0000FF00U) | ((bgra & 0x00FF0000U) >> 16) | (bgra & 0xFF000000U);
 }
 
-//! RGBA to RGB
-static constexpr inline color get_rgb(const color rgba) noexcept
+constexpr uint32_t conv_rgba_to_bgra(const color rgba) noexcept
 {
-    return rgba & 0x00FFFFFF;
+    return ((rgba & 0x000000FFU) << 16) | (rgba & 0x0000FF00U) | ((rgba & 0x00FF0000U) >> 16) | (rgba & 0xFF000000U);
 }
 
-//! RGBA to RGB[0xFF]
-static constexpr inline color get_rgb_opaqui(const color rgba) noexcept
+/// BGRA to RGB, A = 0
+constexpr uint32_t conv_bgra_to_rgb(const color bgra) noexcept
 {
-    return 0xFF000000 | (rgba & 0x00FFFFFF);
+    return ((bgra & 0x000000FFU) << 16) | (bgra & 0x0000FF00U) | ((bgra & 0x00FF0000U) >> 16);
 }
 
-//! RGBA is use alpha
-static constexpr inline uint8_t is_alpha(const color rgba) noexcept
+/// RGBA to BGR, A = 0
+constexpr uint32_t conv_rgba_to_bgr(const color rgba) noexcept
 {
-    return 255 != ((rgba >> 24) & 0xFF);
+    return ((rgba & 0x000000FFU) << 16) | (rgba & 0x0000FF00U) | ((rgba & 0x00FF0000U) >> 16);
 }
 
-//! RGBA to A
-static constexpr inline uint8_t get_alpha(const color rgba) noexcept
+
+/// RGBA to RGB, A = 0
+constexpr color get_rgb(const color rgba) noexcept
 {
-    return (rgba >> 24) & 0xFF;
+    return rgba & 0x00FFFFFFU;
 }
 
-//! RGBA to R
-static constexpr inline uint8_t get_red(const color rgba) noexcept
+/// RGBA to RGB, A = 0xFF
+constexpr color get_rgb_opaqui(const color rgba) noexcept
 {
-    return rgba & 0xFF;
+    return 0xFF000000U | (rgba & 0x00FFFFFFU);
 }
 
-//! RGBA to G
-static constexpr inline uint8_t get_green(const color rgba) noexcept
+/// RGBA to A
+constexpr uint8_t get_alpha(const color rgba) noexcept
 {
-    return (rgba >> 8) & 0xFF;
+    return (rgba >> 24) & 0x000000FFU;
 }
 
-//! RGBA to B
-static constexpr inline uint8_t get_blue(const color rgba) noexcept
+/// RGBA is use alpha
+constexpr uint8_t is_alpha(const color rgba) noexcept
 {
-    return (rgba >> 16) & 0xFF;
+    return 255 != get_alpha(rgba);
 }
 
-//! wui *.json use BGRA format
-
-//! BGRA to A
-static constexpr inline uint8_t get_alpha_bgra(const uint32_t bgra) noexcept
+/// RGBA to R
+constexpr uint8_t get_red(const color rgba) noexcept
 {
-    return (bgra >> 24) & 0xFF;
+    return rgba & 0x000000FFU;
 }
 
-//! BGRA to R
-static constexpr inline uint8_t get_red_bgra(const uint32_t bgra) noexcept
+/// RGBA to G
+constexpr uint8_t get_green(const color rgba) noexcept
 {
-    return (bgra >> 16) & 0xFF;
+    return (rgba >> 8) & 0x000000FFU;
 }
 
-//! BGRA to G
-static constexpr inline uint8_t get_green_bgra(const uint32_t bgra) noexcept
+/// RGBA to B
+constexpr uint8_t get_blue(const color rgba) noexcept
 {
-    return (bgra >> 8) & 0xFF;
+    return (rgba >> 16) & 0x000000FFU;
 }
 
-//! BGRA to B
-static constexpr inline uint8_t get_blue_bgra(const uint32_t bgra) noexcept
+/// wui *.json use BGRA format
+
+/// BGRA to A
+constexpr uint8_t get_alpha_bgra(const uint32_t bgra) noexcept
 {
-    return bgra & 0xFF;
+    return (bgra >> 24) & 0x000000FFU;
 }
+
+/// BGRA to R
+constexpr uint8_t get_red_bgra(const uint32_t bgra) noexcept
+{
+    return (bgra >> 16) & 0x000000FFU;
+}
+
+/// BGRA to G
+constexpr uint8_t get_green_bgra(const uint32_t bgra) noexcept
+{
+    return (bgra >> 8) & 0x000000FFU;
+}
+
+/// BGRA to B
+constexpr uint8_t get_blue_bgra(const uint32_t bgra) noexcept
+{
+    return bgra & 0x000000FFU;
+}
+
+/// RGB[alpha]
+constexpr color set_alpha(const color rgba, const uint8_t alpha) noexcept
+{
+    return (rgba & 0x00FFFFFFU) | (static_cast<uint32_t>(alpha) << 24);
+}
+
+/// RGB[A * c]
+/// c: [0, 1]
+constexpr inline color change_alpha(const color rgba, const float c = 0.8f) noexcept
+{
+    return (rgba & 0x00FFFFFFU) | ((static_cast<uint32_t>(get_alpha(rgba) * c) << 24) & 0xFF000000U);
+}
+
 }
