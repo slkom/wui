@@ -206,8 +206,8 @@ xcb_gcontext_t primitive_container::get_gc(const color color_)
         err.set(error_type::no_handle, "primitive_container::get_gc(color)", "no context_.connection");
         return -1;
     }
-
-    auto it = gcs.find(color_);
+    const auto color__ = conv_rgba_to_bgr(color_);
+    auto it = gcs.find(color__);
     if (it != gcs.end())
     {
         return it->second;
@@ -216,10 +216,10 @@ xcb_gcontext_t primitive_container::get_gc(const color color_)
     auto gc = xcb_generate_id(context_.connection);
 
     uint32_t mask = XCB_GC_FOREGROUND;
-    uint32_t value[] = { color_ };
+    uint32_t value[] = { color__ };
     auto gc_create_cookie = xcb_create_gc(context_.connection, gc, context_.wnd, mask, value);
 
-    gcs[color_] = gc;
+    gcs[color__] = gc;
 
     return gc;
 }
@@ -257,10 +257,10 @@ _cairo *primitive_container::get_font(const font& font_, _cairo_surface *surface
     cairo_font_extents_t font_extents;
     cairo_font_extents(cr, &font_extents);
     double h = font_extents.ascent + font_extents.descent;
-    if (h > font_.size + 2)
+    if (h > font_.size)
     {
         h = font_.size * (font_.size / h);
-        cairo_set_font_size(cr, std::ceil(h));
+        cairo_set_font_size(cr, std::ceil(h)); // font_.size set
     }
 #endif
 
