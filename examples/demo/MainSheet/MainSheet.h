@@ -64,7 +64,7 @@ private:
     std::shared_ptr<wui::text> wuiInfoText =
         std::make_shared<wui::text>(wui::about::full_name + std::string("\n")
         + wui::about::version
-#if defined(_DEBUG)
+#if !defined(NDEBUG)
          + " [Debug]"
 #endif
 #if defined(_UI_CHECK)

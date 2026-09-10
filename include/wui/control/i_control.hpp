@@ -10,6 +10,7 @@
 
 #include <wui/common/error.hpp>
 
+#include <cstdint>
 #include <memory>
 #include <string>
 
@@ -21,6 +22,40 @@ class graphic;
 class window;
 class i_theme;
 
+/// default_: фокус не запоминается на выбранном input контроле, поведение окна по умолчанию.
+/// free: используется для single-line input
+///     Для single-line input фокус теряется по нажатию `return` или по свободному полю окна.
+/// fixed: при использовании флага react, фокус возвращается в выбранный multi-line input контроль
+///     по нажатию `return` для single-line input или по свободному полю окна.
+/// wnd: флаг для окон, используется для быстрого определения окна и его focus mode.
+/// react: используется только для класса window - фокус не возвращается в выбранный input контроль автоматически.
+///        Для перемещения фокуса потребуется использовать выбор контроля [key TAB] или щечек по свободному месту окна.
+/// always: поведение редактора текста. Используется только для класса window -
+///     после выполнения задачи контроля, фокус возвращается в выбранный multi-line input
+///     всегда.
+///     Выбор контроля [key TAB] так же доступен. [Ctrl+Return] для next Input так же доступен.
+enum class focus_mode : uint32_t
+{
+    default_ = (1 << 0), /// default mode, user-focused only
+    free = (1 << 1), /// flag for single-line input
+    fixed = (1 << 2), /// flag for multi-line input
+    wnd = (1 << 3), /// flag for window, to control window focus
+    react = (1 << 4), /// flag for window - multi-line input mode: respond to the user's desires to select input
+    always = (1 << 5), /// flag for window - editor behavior, multi-line input mode
+
+    input_set = free | fixed, // for check single/multi-line input focus mode
+    react_set = react | always
+};
+
+inline constexpr focus_mode operator|(const focus_mode l, const focus_mode r)
+{
+    return static_cast <focus_mode> (static_cast <uint32_t> (l) | static_cast <uint32_t> (r));
+}
+inline constexpr bool operator&(const focus_mode l, const focus_mode r)
+{
+    return 0 != (static_cast <uint32_t> (l) & static_cast <uint32_t> (r));
+}
+
 class i_control
 {
 public:
@@ -28,6 +63,8 @@ public:
 
     virtual void set_position(const rect& position) = 0;
     [[nodiscard]] virtual rect position() const = 0;
+
+    virtual void move(const int32_t dx, const int32_t dy) = 0;
 
     virtual void set_parent(std::shared_ptr<window> window_) = 0;
     [[nodiscard]] virtual std::weak_ptr<window> parent() const = 0;
@@ -49,6 +86,11 @@ public:
 
     [[nodiscard]] virtual bool focused() const = 0;  /// Returns true if the control is focused
     [[nodiscard]] virtual bool focusing() const = 0; /// Returns true if the control receives focus
+
+    [[nodiscard]] virtual focus_mode get_focus_mode() const
+    {
+        return focus_mode::default_;
+    };
 
     [[nodiscard]] virtual error get_error() const = 0;
 

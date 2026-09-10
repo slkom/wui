@@ -51,9 +51,10 @@ void framework_win_impl::stop()
     {
         PostQuitMessage(IDCANCEL);
         started_ = false;
-
-        // err.reset(); // сохраняем ошибки
     }
+    auto listener__ = framework::get_listener();
+    if (listener__)
+        listener__->stop(); // не обязательно, но помогает отладке
 }
 
 bool framework_win_impl::started() const

@@ -13,6 +13,7 @@
 #include <wui/theme/theme.hpp>
 
 #include <wui/system/tools.hpp>
+#include <assert.h>
 
 namespace wui
 {
@@ -21,9 +22,7 @@ panel::panel(std::string_view theme_control_name, std::shared_ptr<i_theme> theme
     : tcn(theme_control_name),
     theme_(theme__),
     position_{ 0 },
-    parent_(),
-    showed_(true), topmost_(false),
-    draw_callback()
+    showed_(true), topmost_(false)
 {
 }
 
@@ -31,7 +30,6 @@ panel::panel(std::function<void(graphic&)> draw_callback_, std::string_view them
     : tcn(theme_control_name),
     theme_(theme__),
     position_{ 0 },
-    parent_(),
     showed_(true), topmost_(false),
     draw_callback(draw_callback_)
 {
@@ -43,6 +41,20 @@ panel::~panel()
     if (parent__)
     {
         parent__->remove_control(shared_from_this());
+    }
+}
+
+void panel::add_control(std::shared_ptr<i_control> control)
+{
+    if (std::find(controls.begin(), controls.end(), control) == controls.end())
+    {
+#ifndef NDEBUG
+        if (this == control.get())
+        {
+            assert(0);
+        }
+#endif
+        controls.emplace_back(control);
     }
 }
 
@@ -63,12 +75,24 @@ void panel::draw(graphic &gr, const rect&)
 
 void panel::set_position(const rect& position__)
 {
+    const auto dx = position_.left - position__.left;
+    const auto dy = position_.top - position__.top;
     position_ = position__;
+
+    for (auto control : controls)
+    {
+        control->move(dx, dy);
+    }
 }
 
 rect panel::position() const
 {
     return get_control_position(position_, parent_);
+}
+
+void panel::move(const int32_t dx, const int32_t dy)
+{
+    position_.move(dx, dy);
 }
 
 void panel::set_parent(std::shared_ptr<window> window)

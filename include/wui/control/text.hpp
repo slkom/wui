@@ -23,7 +23,7 @@
 #   undef _UI_CHECK
 #else
 // отладочный параметр, пока только для text
-#ifdef _DEBUG
+#ifndef NDEBUG
 //# define _UI_CHECK
 #endif
 #endif
@@ -50,6 +50,7 @@ public:
 
     virtual void set_position(const rect& position) override;
     [[nodiscard]] virtual rect position() const override;
+    virtual void move(const int32_t dx, const int32_t dy) override;
 
     virtual void set_parent(std::shared_ptr<window> window_) override;
     [[nodiscard]] virtual std::weak_ptr<window> parent() const override;
@@ -210,7 +211,7 @@ protected:
 
     std::string text_;
 
-    double space_coeff_{ _default_space_coeff }; //! line spacing = font_height * coefficient
+    double space_coeff_{ _default_space_coeff }; //! line spacing = font_ideal_height * coefficient
 
     hori_alignment hori_alignment_;
     vert_alignment vert_alignment_;
@@ -232,7 +233,7 @@ public:
     virtual ~text();
 
 protected:
-    [[nodiscard]] virtual int32_t font_ideal_height(const font& font_, graphic* gr);
+    [[nodiscard]] virtual int32_t font_ideal_height(const font& font_, graphic* gr) override;
 
     /// return text width
     [[nodiscard]] virtual int32_t measure_text_line(const std::string& text__,
@@ -260,7 +261,7 @@ public:
     virtual ~text_ex();
 
 protected:
-    [[nodiscard]] virtual int32_t font_ideal_height(const font& font_, graphic* gr);
+    [[nodiscard]] virtual int32_t font_ideal_height(const font& font_, graphic* gr) override;
 
     /// return: text width
     [[nodiscard]] virtual int32_t measure_text_line(const std::string& text__,

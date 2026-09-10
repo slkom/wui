@@ -17,15 +17,15 @@
 namespace wui
 {
 
- splitter::splitter(splitter_orientation orientation_, std::function<void(int32_t, int32_t)> callback_, std::string_view theme_control_name, std::shared_ptr<i_theme> theme__)
-    : orientation(orientation_),
-    callback(callback_),
+ splitter::splitter(orientation orientation__, std::function<void(int32_t , int32_t )> callback_, std::string_view theme_control_name, std::shared_ptr<i_theme> theme__)
+    : orientation_(orientation__),
+    callback1(callback_),
     margin_min(-1), margin_max(-1),
     tcn(theme_control_name),
     theme_(theme__),
     position_{ },
-    showed_(true), enabled_(true), active(false), topmost_(false),
-    prev_pos{0}
+    prev_pos{ },
+    showed_(true), enabled_(true), active(false), topmost_(false)
 {
 }
 
@@ -62,37 +62,30 @@ void splitter::receive_control_events(const event& ev)
         case mouse_event_type::enter:
         {
             cursor cursor__{ cursor::default_ };
-            if (orientation == splitter_orientation::vertical)
+            if (orientation_ == orientation::vertical)
             {
                 cursor__ = cursor::size_we;
             }
-            else if (orientation == splitter_orientation::horizontal)
+            else if (orientation_ == orientation::horizontal)
             {
                 cursor__ = cursor::size_ns;
             }
 
-            auto parent__ = parent_.lock();
-            if (parent__)
-            {
-                set_cursor(parent__->context(), cursor__);
-            }
+            set_cursor(parent_, cursor__);
         }
         break;
+
         case mouse_event_type::leave:
             if (!active)
             {
-                auto parent__ = parent_.lock();
-                if (parent__)
-                {
-                    set_cursor(parent__->context(), cursor::default_);
-                }
+                set_cursor(parent_, cursor::default_);
             }
         break;
         case mouse_event_type::left_down:
             active = true;
             redraw();
             break;
-        }
+    }
     }
 }
 
@@ -110,7 +103,7 @@ void splitter::receive_plain_events(const event& ev)
         {
             auto pos = position_;
 
-            if (orientation == splitter_orientation::vertical)
+            if (orientation_ == orientation::vertical)
             {
                 pos.put(ev.mouse_event_.x, pos.top);
 
@@ -123,7 +116,7 @@ void splitter::receive_plain_events(const event& ev)
                     pos.right -= pp.left;
                 }
             }
-            else if (orientation == splitter_orientation::horizontal)
+            else if (orientation_ == orientation::horizontal)
             {
                 pos.put(pos.left, ev.mouse_event_.y);
 
@@ -136,7 +129,7 @@ void splitter::receive_plain_events(const event& ev)
                 }
             }
 
-            if (orientation == splitter_orientation::vertical)
+            if (orientation_ == orientation::vertical)
             {
                 if (margin_min != -1 && pos.left <= margin_min)
                 {
@@ -147,7 +140,7 @@ void splitter::receive_plain_events(const event& ev)
                     pos = { margin_max - pos.width(), pos.top, margin_max, pos.bottom };
                 }
             }
-            else if (orientation == splitter_orientation::horizontal)
+            else if (orientation_ == orientation::horizontal)
             {
                 if (margin_min != -1 && pos.top <= margin_min)
                 {
@@ -166,23 +159,18 @@ void splitter::receive_plain_events(const event& ev)
 
             if (callback)
             {
-                callback(pos.left, pos.top);
-                //TODO: callback(pos, prev_pos);
+                callback(pos, prev_pos);
                 prev_pos = pos;
             }
         }
-        break;
-        case mouse_event_type::left_up:
-            if (active)
-            {
-                active = false;
-                redraw();
+    break;
+    case mouse_event_type::left_up:
+        if (active)
+        {
+            active = false;
+            redraw();
 
-            auto parent__ = parent_.lock();
-            if (parent__)
-            {
-                set_cursor(parent__->context(), cursor::default_);
-            }
+            set_cursor(parent_, cursor::default_);
         }
         break;
     }
@@ -190,12 +178,20 @@ void splitter::receive_plain_events(const event& ev)
 
 void splitter::set_position(const rect& position__)
 {
+    prev_pos = position_;
     position_ = position__;
 }
 
 rect splitter::position() const
 {
     return get_control_position(position_, parent_);
+}
+
+void splitter::move(const int32_t dx, const int32_t dy)
+{
+    rect position = position_;
+    position.move(dx, dy);
+    set_position(position);
 }
 
 void splitter::set_parent(std::shared_ptr<window> window_)
@@ -309,8 +305,26 @@ bool splitter::enabled() const
     return enabled_;
 }
 
-void splitter::set_callback(std::function<void(int32_t, int32_t)> callback_)
+void splitter::set_callback(std::function<void(int32_t, int32_t )> callback_)
 {
+    callback1 = callback_;
+    if (callback_)
+    {
+        callback = [this](const rect& pos, const rect& prev_pos)
+            {
+                callback1(pos.left, pos.top);
+            };
+    }
+    else
+    {
+        callback1 = nullptr;
+    }
+
+}
+
+void splitter::set_callback_ex(std::function<void(const rect& pos, const rect& prev_pos)> callback_)
+{
+    callback1 = nullptr;
     callback = callback_;
 }
 

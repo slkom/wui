@@ -1,4 +1,4 @@
-file(GLOB SOURCES
+file(GLOB SOURCES 
 	*.cpp
 	ButtonSheet/*.cpp
 	InputSheet/*.cpp
@@ -6,6 +6,10 @@ file(GLOB SOURCES
 	MainSheet/*.cpp)
 
 include_directories(.)
+
+if(NOT CMAKE_DEBUG_POSTFIX)
+	set(CMAKE_DEBUG_POSTFIX "_d")
+endif()
 
 add_executable(demo ${SOURCES})
 

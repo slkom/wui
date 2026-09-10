@@ -21,7 +21,6 @@ tooltip::tooltip(std::string_view text_, std::string_view theme_control_name, st
     : tcn(theme_control_name),
     theme_(theme__),
     position_{ 0 },
-    parent_(),
     showed_(false),
     text(text_)
 {
@@ -69,6 +68,12 @@ void tooltip::set_position(const rect& position__)
 rect tooltip::position() const
 {
     return get_control_position(position_, parent_);
+}
+
+void tooltip::move(const int32_t dx, const int32_t dy)
+{
+    position_.move(dx, dy);
+    set_position(position_);
 }
 
 void tooltip::set_parent(std::shared_ptr<window> window)

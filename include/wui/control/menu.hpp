@@ -25,6 +25,7 @@ namespace wui
 {
 
 class image;
+//class menu;
 
 enum class menu_item_state
 {
@@ -37,7 +38,7 @@ enum class menu_item_state
 template < typename T >
 struct menu_item_data_
 {
-    int32_t id{ };
+    int32_t id{};
 
     menu_item_state state{ menu_item_state::normal };
 
@@ -72,17 +73,12 @@ struct menu_item;
 
 struct menu_item_data : public menu_item_data_ < menu_item_data >
 {
-    menu_item_data& operator=(const menu_item_data& item)
-    {
-        menu_item_data_ < menu_item_data >::operator =(item);
-        return *this;
-    }
 };
 
 struct menu_item : public menu_item_data_ < menu_item >
 {
-    int32_t level{};
-    menu_item_state prev_state{};
+    int32_t level{ };
+    menu_item_state prev_state{ menu_item_state::normal };
 
     inline menu_item& operator=(const menu_item& item)
     {
@@ -115,6 +111,7 @@ public:
 
     virtual void set_position(const rect& position) override;
     [[nodiscard]] virtual rect position() const override;
+    virtual void move(const int32_t dx, const int32_t dy) override;
 
     virtual void set_parent(std::shared_ptr<window> window_) override;
     [[nodiscard]] virtual std::weak_ptr<window> parent() const override;
@@ -165,13 +162,15 @@ public:
     /// Used theme values
     static constexpr const char *tv_background = "background";
     static constexpr const char *tv_border = "border";
-    static constexpr const char *tv_border_width = "border_width";
     static constexpr const char *tv_text = "text";
     static constexpr const char *tv_disabled_text = "disabled_text";
     static constexpr const char *tv_selected_item = "selected_item";
     static constexpr const char *tv_scrollbar = "scrollbar";
     static constexpr const char *tv_scrollbar_slider = "scrollbar_slider";
     static constexpr const char *tv_scrollbar_slider_acive = "scrollbar_slider_active";
+    static constexpr const char *tv_border_width = "border_width";
+    static constexpr const char* tv_border_item = "border_item";
+    static constexpr const char* tv_item_indent = "item_indent";
     static constexpr const char *tv_round = "round";
     static constexpr const char *tv_font = "font";
 

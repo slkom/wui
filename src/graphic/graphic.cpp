@@ -56,7 +56,8 @@ graphic::graphic(system_context &context__)
       background_color(make_color(0, 0, 0, 0))
 #ifdef _WIN32
     , mem_dc(NULL),
-      mem_bitmap(NULL)
+      mem_bitmap(NULL),
+      mem_bitmap_old(NULL)
 #elif __linux__
     , mem_pixmap(0),
       surface(nullptr),
@@ -79,19 +80,23 @@ bool graphic::inited() const noexcept
 #endif
 }
 
-bool graphic::init(const rect &max_size__, const color background_color_)
+bool graphic::init(const rect& max_size__, const color background_color_, const bool clear_)
 {
     if (inited())
     {
         err.set(error_type::already_started, "graphic::init()", "the object 'graphic' are already initialized");
         return false;
     }
-
     max_size_ = max_size__;
+
+    // ? max_size_.is_hide() -> max_size_.resize(1, 1);
+    // If an application sets the nWidth or nHeight parameters to zero,
+    // CreateCompatibleBitmap()
+    // returns the handle to a 1-by-1 pixel, monochrome bitmap.
+
     background_color = background_color_;
 
 #ifdef _WIN32
-
     auto wnd_dc = GetDC(context_.hwnd);
 
     mem_dc = CreateCompatibleDC(wnd_dc);
@@ -108,20 +113,21 @@ bool graphic::init(const rect &max_size__, const color background_color_)
         DeleteDC(mem_dc);
         mem_dc = NULL;
         ReleaseDC(context_.hwnd, wnd_dc);
-        err.set(error_type::no_handle, "graphic::init()", "CreateCompatibleBitmap returns null");
+        err.set(error_type::no_handle, "graphic::init()", "CreateCompatibleBitmap return null");
         return false;
     }
 
-    SelectObject(mem_dc, mem_bitmap);
+    mem_bitmap_old = SelectObject(mem_dc, mem_bitmap);
 
     SetMapMode(mem_dc, MM_TEXT);
 
-    RECT filling_rect = { 0, 0, max_size_.width(), max_size_.height() };
-    FillRect(mem_dc, &filling_rect, pc.get_brush(background_color));
+    if (clear_)
+    {
+        RECT filling_rect = { 0, 0, max_size_.width(), max_size_.height() };
+        FillRect(mem_dc, &filling_rect, pc.get_brush(background_color));
+    }
 
     ReleaseDC(context_.hwnd, wnd_dc);
-
-    //err.reset(); // сохраняем ошибки, для публикации
 
 #elif __linux__
 
@@ -142,7 +148,7 @@ bool graphic::init(const rect &max_size__, const color background_color_)
     {
         mem_pixmap = 0;
         err.set(error_type::no_handle, "graphic::init() xcb_create_pixmap",
-            "Can't create the pixmap");
+            "Can't create the cairo pixmap");
         return false;
     }
 
@@ -158,9 +164,10 @@ bool graphic::init(const rect &max_size__, const color background_color_)
         return false;
     }
 
-    clear(max_size_);
-
-    //err.reset();  // сохраняем ошибки, для публикации
+    if (clear_)
+    {
+        clear(max_size_);
+    }
 #endif
 
     pc.init();
@@ -175,6 +182,8 @@ void graphic::release()
         return;
 
 #ifdef _WIN32
+    SelectObject(mem_dc, mem_bitmap_old);
+    mem_bitmap_old = NULL;
     DeleteObject(mem_bitmap);
     mem_bitmap = NULL;
 
@@ -199,11 +208,14 @@ rect graphic::max_size() const noexcept
     return max_size_;
 }
 
-void graphic::set_background_color(color background_color_)
+void graphic::set_background_color(color background_color_, const bool clear_)
 {
     background_color = background_color_;
 
-    clear({ 0, 0, max_size_.width(), max_size_.height() });
+    if (clear_)
+    {
+        clear({ 0, 0, max_size_.width(), max_size_.height() });
+    }
 }
 
 void graphic::clear(const rect& position)
@@ -263,7 +275,7 @@ void graphic::flush(const rect& updated_size)
         auto copy_area_cookie = xcb_copy_area(context_.connection,
             mem_pixmap,
             context_.wnd,
-            pc.get_gc(background_color),
+            pc.get_gc(background_color), //TODO
             updated_size.left,
             updated_size.top,
             updated_size.left,
@@ -292,7 +304,6 @@ void graphic::draw_pixel(const rect& position, const color color_)
 #endif
 }
 
-// NB: linux width = 1 always
 void graphic::draw_line(const rect& position, const color color_, const int32_t width)
 {
 #ifdef _WIN32
@@ -303,14 +314,14 @@ void graphic::draw_line(const rect& position, const color color_, const int32_t 
 
     SelectObject(mem_dc, old_pen);
 #elif __linux__
+// NB: linux width = 1 always TODO
     xcb_point_t polyline[] = { { static_cast<int16_t>(position.left), static_cast<int16_t>(position.top) },
         { static_cast<int16_t>(position.right), static_cast<int16_t>(position.bottom) } };
     xcb_poly_line(context_.connection, XCB_COORD_MODE_ORIGIN, mem_pixmap,
         pc.get_gc(color_),
-        2, polyline);
+2, polyline);
 #endif
 }
-
 
 int32_t graphic::get_font_ideal_height(const font& font__)
 {
@@ -318,7 +329,6 @@ int32_t graphic::get_font_ideal_height(const font& font__)
     {
         return font__.size;
     }
-
 #ifdef _WIN32
     auto old_font = (HFONT)SelectObject(mem_dc, pc.get_font(font__));
     TEXTMETRIC tm;
@@ -338,10 +348,9 @@ int32_t graphic::get_font_ideal_height(const font& font__)
         err.set(error_type::no_handle, "graphic::measure_text()", "No cairo font context");
         return font__.size;
     }
-
     cairo_font_extents_t fe;
     cairo_font_extents(cr, &fe);
-    return static_cast<int32_t>(std::ceil(fe.height));
+    return fe.height;
 #endif
 }
 
@@ -352,13 +361,12 @@ int32_t graphic::get_font_ideal_height_gdiplus(const font& font__)
     {
         return font__.size;
     }
-
     auto old_font = (HFONT)SelectObject(mem_dc, pc.get_font(font__));
     Gdiplus::Graphics g(mem_dc);
     Gdiplus::Font font(mem_dc);
     const Gdiplus::REAL lineSpacing = font.GetHeight(&g);
     SelectObject(mem_dc, old_font);
-    return static_cast<int32_t>(std::ceil(lineSpacing));
+    return static_cast<int32_t>(std::round(lineSpacing));
 }
 #endif
 
@@ -373,7 +381,7 @@ rect graphic::measure_text(std::string_view text_, const font &font__)
     auto old_font = (HFONT)SelectObject(mem_dc, pc.get_font(font__));
 
     SIZE sz{ };
-    auto wide_str = boost::nowide::widen(text_);
+    auto wide_str = std::move(boost::nowide::widen(text_));
     GetTextExtentPoint32W(mem_dc, wide_str.c_str(), static_cast<int>(wide_str.size()), &sz);
 
     //RECT text_rect{ };
@@ -390,11 +398,11 @@ rect graphic::measure_text(std::string_view text_, const font &font__)
     if (!cr)
     {
         err.set(error_type::no_handle, "graphic::measure_text()", "No cairo font context");
-        return { 0, 0, 0, font__.size };
+        return rect{ };
     }
 
-    cairo_text_extents_t dot_te, te;   // It's a workaround 'magic'
-    cairo_text_extents(cr, ".", &dot_te);   // to work the spaces
+    cairo_text_extents_t dot_extents, extents;   // It's a workaround 'magic'
+    cairo_text_extents(cr, ".", &dot_extents);   // to work the spaces
     if (CAIRO_STATUS_SUCCESS != cairo_status(cr))
     {
         return { 0, 0, 0, font__.size };
@@ -402,17 +410,20 @@ rect graphic::measure_text(std::string_view text_, const font &font__)
 
     std::string s; s.reserve(text_.size() + 2);  //
     s = '.' + std::string(text_) + '.';          // =)
-    cairo_text_extents(cr, s.c_str(), &te);
+    cairo_text_extents(cr, s.c_str(), &extents);
     if(CAIRO_STATUS_SUCCESS != cairo_status(cr))
     {
         return { 0, 0, 0, font__.size };
     }
+
     cairo_font_extents_t fe;
     cairo_font_extents(cr, &fe);
+
     return { 0, 0,
-        static_cast<int32_t>(ceil(te.width - (dot_te.width * 3))),
-//        static_cast<int32_t>(ceil(te.height)) }; // bad if "-", "+" text
-        static_cast<int32_t>(ceil(fe.ascent + fe.descent)) };
+        static_cast<int32_t>(ceil(extents.width - (dot_extents.width * 3))),
+        //  static_cast<int32_t>(ceil(te.height)) }; // bad if "-", "+" text
+            static_cast<int32_t>(ceil(fe.ascent + fe.descent))
+};
 #endif
 }
 
@@ -434,7 +445,7 @@ rect graphic::measure_text_gdiplus(std::string_view text_, const font &font__)
     //(0, 0, static_cast<Gdiplus::REAL>(client_rect.right - client_rect.left),
     //static_cast<Gdiplus::REAL>(client_rect.bottom - client_rect.top));
 
-    auto wide_str = boost::nowide::widen(text_);
+    auto wide_str = std::move(boost::nowide::widen(text_));
     Gdiplus::RectF boundingBox;
     Gdiplus::Graphics g(mem_dc);
 
@@ -469,7 +480,7 @@ void graphic::draw_text(const rect &position, std::string_view text_, const colo
     SetTextColor(mem_dc, get_rgb(color_));
     SetBkMode(mem_dc, TRANSPARENT);
 
-    auto wide_str = boost::nowide::widen(text_);
+    auto wide_str = std::move(boost::nowide::widen(text_));
 #if 1
     TextOutW(mem_dc, position.left, position.top, wide_str.c_str(), static_cast<int>(wide_str.size()));
 #else
@@ -493,6 +504,7 @@ void graphic::draw_text(const rect &position, std::string_view text_, const colo
         static_cast<double>(get_red(color_)) / 255,
         static_cast<double>(get_green(color_)) / 255,
         static_cast<double>(get_blue(color_)) / 255
+        //, static_cast<double>(get_alpha(color_)) / 255 // rgba
     );
 
     const auto top = position.top + font__.size * 5.0 / 6.0;
@@ -541,12 +553,11 @@ void graphic::draw_text_clip_rgb(const rect& position, const text_lines_t& lines
     SetTextColor(mem_dc, get_rgb(color_));
     SetBkMode(mem_dc, TRANSPARENT);
 
-    const RECT rc = { position.left, position.top,
-        position.right, position.bottom };
+    const RECT rc = { position.left, position.top, position.right, position.bottom };
     const RECT* ptr_rc = clip_ ? &rc : nullptr;
     for (auto& line : lines)
     {
-        auto wide_str = boost::nowide::widen(line.str);
+        auto wide_str = std::move(boost::nowide::widen(line.str));
         ExtTextOutW(mem_dc,
             position.left + line.rc.left, position.top + line.rc.top,
             ETO_CLIPPED,
@@ -579,7 +590,7 @@ void graphic::draw_text_clip(const rect& position, const text_lines_t& lines,
 
     for (auto& line : lines)
     {
-        auto wide_str = boost::nowide::widen(line.str);
+        auto wide_str = std::move(boost::nowide::widen(line.str));
         const Gdiplus::PointF pt(static_cast<Gdiplus::REAL>(position.left + line.rc.left),
             static_cast<Gdiplus::REAL>(position.top + line.rc.top));
         g.DrawString(wide_str.c_str(),
@@ -636,7 +647,6 @@ void graphic::draw_text_clip(const rect & position, const text_lines_t & lines,
             //const double y_offset = -(fe.ascent * 0.3);
         }
     }
-
     std::string text;
     for (auto& line : lines)
     {
@@ -669,9 +679,16 @@ void graphic::draw_text_clip(const rect & position, const text_lines_t & lines,
 void graphic::draw_rect(const rect& position, const color fill_color)
 {
 #ifdef _WIN32
-    RECT position_rect = { position.left, position.top, position.right, position.bottom };
+    const RECT position_rect = { position.left, position.top, position.right, position.bottom };
     FillRect(mem_dc, &position_rect, pc.get_brush(fill_color));
 #elif __linux__
+    //assert(surface);
+    //if (!surface)
+    //{
+    //    err.set(error_type::no_handle, "graphic::draw_rect()", "No cairo surface");
+    //    return;
+    //}
+
     auto pos = position;
     if (pos.left > pos.right)
     {
@@ -703,12 +720,13 @@ static void DrawRoundBox(HDC dc, const rect &pos_, const int32_t radius_,
         borderWidth = -borderWidth;
     }
     const int32_t shift1 = -borderWidth / 2;
-    const int32_t shift2 = static_cast<int32_t>(std::round(borderWidth / 2.0));
+    const int32_t shift2 = 0;//static_cast<int32_t>(std::round(borderWidth / 2.0));
     const rect pos{ pos_.left - shift1, pos_.top - shift1,
         pos_.right - shift2, pos_.bottom - shift2 };
 
     Gdiplus::Graphics g(dc);
     Gdiplus::GraphicsPath path;
+    // Make the path
     if (radius_)
     {
         g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
@@ -882,8 +900,7 @@ void graphic::draw_buffer(const rect& position,
 
     image->data = buffer;
 
-    xcb_image_put(context_.connection, pixmap,
-        pc.get_gc(background_color), image, 0, 0, 0);
+    xcb_image_put(context_.connection, pixmap, pc.get_gc(background_color), image, 0, 0, 0);
 
     xcb_image_destroy(image);
 
@@ -910,7 +927,7 @@ void graphic::draw_buffer(const rect& position,
 #endif
 }
 
-void graphic::draw_graphic(const rect& position, graphic &graphic_,
+void graphic::copy_area(const rect& position, graphic &graphic_,
     const int32_t left_shift, const int32_t top_shift)
 {
 #ifdef _WIN32
@@ -919,9 +936,9 @@ void graphic::draw_graphic(const rect& position, graphic &graphic_,
         BitBlt(mem_dc,
             position.left,
             position.top,
-            position.right,
-            position.bottom,
-            graphic_.drawable(),
+            position.width(),
+            position.height(),
+            graphic_.mem_dc,
             left_shift,
             top_shift,
             SRCCOPY);
@@ -930,15 +947,15 @@ void graphic::draw_graphic(const rect& position, graphic &graphic_,
     if (graphic_.drawable())
     {
         auto copy_area_cookie = xcb_copy_area(context_.connection,
-            graphic_.drawable(),
+            graphic_.mem_pixmap,
             mem_pixmap,
             pc.get_gc(graphic_.background_color), //old: this->background_color
             left_shift,
             top_shift,
             position.left,
             position.top,
-            position.right,
-            position.bottom);
+            position.width(),
+            position.height());
 
         if (!check_cookie(copy_area_cookie, context_.connection, err, "graphic::draw_graphic() xcb_copy_area"))
         {
@@ -952,7 +969,7 @@ void graphic::draw_graphic(const rect& position, graphic &graphic_,
 #elif __linux__
 
 /// workarounds
-void graphic::draw_surface(cairo_surface_t &surface_, const rect& position__)
+void graphic::draw_surface(cairo_surface_t &surface_, const rect& position__, const bool grayscale)
 {
     auto cr = cairo_create(surface);
 
@@ -967,6 +984,12 @@ void graphic::draw_surface(cairo_surface_t &surface_, const rect& position__)
         y_scale_factor = static_cast<double>(position__.height()) / surface_height;
 
         cairo_scale(cr, x_scale_factor, y_scale_factor);
+    }
+
+    if (grayscale) //TODO: tested
+    {
+        cairo_set_operator(cr, CAIRO_OPERATOR_HSL_LUMINOSITY);
+        cairo_set_source_rgba(cr, 0.0, 0.0, 0.0, 0.4);
     }
 
     cairo_set_source_surface(cr,
@@ -990,16 +1013,21 @@ error graphic::get_error() const
 
 static graphic* tm_graphic = nullptr;
 
+// TODO: для совместимости с стилем кодирования, когда
+// различные вызовы требуют инициализации окна, создают временное невидимое окно,
+// для измерений текста так же возможно использовать внешние библиотеки
+
 void graphic::set_text_measurer(graphic* gr) noexcept
 {
     tm_graphic = gr;
 }
 
-//NB: ? добавить для совместимости с wui-1.3.260215
-//void init_text_measurer(graphic* gr) noexcept
-//{
-//    tm_graphic = gr;
-//}
+// для совместимости с wui-1.3.260215:
+// The first WUI::window during initialization creates a graphical context.
+void init_text_measurer(graphic* gr) noexcept
+{
+    graphic::set_text_measurer(gr);
+}
 
 graphic* graphic::get_text_measurer() noexcept
 {
@@ -1040,7 +1068,6 @@ int32_t get_font_ideal_height_gdiplus(const font& font_, graphic* gr)
     return gr->get_font_ideal_height_gdiplus(font_);
 }
 #endif
-
 static std::unordered_map<std::string, std::pair<int32_t, int32_t>> tm_cache;
 
 static size_t font_hash(const font &font_)

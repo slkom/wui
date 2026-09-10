@@ -14,7 +14,7 @@
 
 #include <wui/system/tools.hpp>
 
-#include <algorithm>
+#include <iostream>
 
 namespace wui
 {
@@ -23,24 +23,17 @@ list::list(std::string_view theme_control_name_, std::shared_ptr<i_theme> theme_
     : tcn(theme_control_name_),
     theme_(theme__),
     position_{ 0 },
-    parent_(),
-    my_control_sid(),
-    showed_(true), enabled_(true), focused_(false), mouse_on_control(false), mouse_on_slider(false),
-    columns_(),
+    showed_(true), enabled_(true), focused_(false),
+    mouse_on_control(false), mouse_on_slider(false),
     mode(list_mode::simple),
-    item_count(0), selected_item_(0), active_item_(-1),
-    mem_gr(),
-    title_height(-1),
+    item_count(0), selected_item_(-1), active_item_(-1), // TODO: int64_t
+    title_height(0),
     scroll_area(0),
-    vert_scroll(std::make_shared<scroll>(0, 0, orientation::vertical, std::bind(&list::on_scroll, this, std::placeholders::_1, std::placeholders::_2), scroll::tc, theme__)),
-    draw_callback(),
-    item_height_callback(),
-    item_change_callback(),
-    item_click_callback(),
-    column_click_callback(),
-    item_activate_callback(),
-    scroll_callback()
+    vert_scroll(std::make_shared<scroll>(0, 0, orientation::vertical,
+        std::bind(&list::on_scroll, this, std::placeholders::_1,
+            std::placeholders::_2), scroll::tc, theme__))
 {
+    update_theme();
 }
 
 list::~list()
@@ -59,62 +52,66 @@ int32_t list::get_font_size() const
 
 bool list::update_mem_gr()
 {
-    if (!mem_gr) return false;
+    if (!mem_gr)
+    {
+        return false;
+    }
 
-    auto width = position_.width(), height = position_.height();
+    auto width = position_.width() - 2 * (theme_data_.border_width + theme_data_.item_indent);
+    auto height = position_.height() - title_height - 2 * theme_data_.border_width
+        - theme_data_.item_indent;
 
     auto current = mem_gr->max_size();
 
     if (current.width() < width || current.height() < height)
     {
         mem_gr->release();
-        return mem_gr->init({ 0, 0, width, height }, theme_color(tcn, tv_background, theme_));
+        return mem_gr->init({ 0, 0, width, height }, theme_data_.background);
     }
 
+    mem_gr->clear();
     return true;
 }
 
 void list::draw(graphic &gr, const rect&)
 {
-    if (!showed_ || position_.is_null())
+    if (!showed_ || position_.is_hide() || !update_mem_gr())
     {
         return;
     }
 
-    auto control_pos = position();
-
-    bool ok = update_mem_gr();
-    if (!ok) return;
-
-    mem_gr->clear();
-
-    calc_title_height(*mem_gr);
+    const auto control_pos = position();
+    if (theme_data_.round)
+    {
+        /// Draw the frame (gr)
+        gr.draw_rect(control_pos, make_color(0, 0, 0, 0),
+            theme_data_.background, 0, theme_data_.round);
+    }
 
     draw_items(*mem_gr);
+    if (title_height)
+    {
+        /// Draw the titles (gr)
+        draw_titles(gr);
+    }
 
-    draw_titles(*mem_gr);
-
-    gr.draw_graphic({ control_pos.left,
-            control_pos.top,
-            control_pos.width(),
-            control_pos.height() },
-        *mem_gr, 0, 0);
+    // Copying the offscreen buffer to the parent context
+    gr.copy_area(control_pos, *mem_gr,
+        -theme_data_.border_width - theme_data_.item_indent ,
+        -title_height - theme_data_.border_width);
 
     if ((mouse_on_control || focused_) && has_scrollbar())
     {
         vert_scroll->draw(gr, {});
     }
 
-    const auto border_color = focused_
-        ? theme_color(tcn, tv_focused_border, theme_)
-        : (!mouse_on_control ? theme_color(tcn, tv_border, theme_) : theme_color(tcn, tv_hover_border, theme_));
-
-    const auto border_width = theme_dimension(tcn, tv_border_width, theme_);
-    gr.draw_rect(control_pos,
-        border_color,
-        make_color(0, 0, 0, 0), //{ theme_color(tcn, tv_background, theme_), 0 },
-        border_width,
-        theme_dimension(tcn, tv_round, theme_));
+    if (theme_data_.border_width)
+    {
+        const auto border_color = focused_ ? theme_data_.focused_border :
+            (!mouse_on_control ? theme_data_.border : theme_data_.hover_border);
+        gr.draw_rect(control_pos, border_color, make_color(0, 0, 0, 0),
+            theme_data_.border_width, theme_data_.round);
+    }
 }
 
 void list::receive_control_events(const event &ev)
@@ -171,6 +168,7 @@ void list::receive_control_events(const event &ev)
             case mouse_event_type::leave:
                 mouse_on_control = false;
                 mouse_on_slider = false;
+                active_item_ = -1;
                 redraw();
             break;
             case mouse_event_type::left_down:
@@ -185,7 +183,7 @@ void list::receive_control_events(const event &ev)
                             {
                                 column_click_callback(n);
                             }
-                            return;
+                            break;
                         }
 
                         pos += c.width;
@@ -193,22 +191,12 @@ void list::receive_control_events(const event &ev)
                     }
                     return;
                 }
-#if 0
-                // не стандартное поведение, обычно отклик по left_up
-                // NB: к тому же мешает определить событие!
-                else
-                {
-                    update_selected_item(ev.mouse_event_.y);
-
-                    if (item_click_callback)
-                    {
-                        item_click_callback(click_button::left, selected_item_, ev.mouse_event_.x, ev.mouse_event_.y);
-                    }
-                }
-            break;
-#else
             break;
             case mouse_event_type::left_up:
+                if (ev.mouse_event_.y - position().top <= title_height)
+                {
+                    return;
+                }
                 update_selected_item(ev.mouse_event_.y);
 
                 if (item_click_callback)
@@ -216,7 +204,6 @@ void list::receive_control_events(const event &ev)
                     item_click_callback(click_button::left, selected_item_, ev.mouse_event_.x, ev.mouse_event_.y);
                 }
             break;
-#endif
             case mouse_event_type::right_up:
                 if (ev.mouse_event_.y - position().top <= title_height)
                 {
@@ -247,17 +234,15 @@ void list::receive_control_events(const event &ev)
             {
                 if (mode == list_mode::simple || mode == list_mode::simple_topmost)
                 {
-                    update_active_item(ev.mouse_event_.y);
+                    if(!has_scrollbar()
+                        || vert_scroll->get_scroll_view() != scroll_view::full)
+                        update_active_item(ev.mouse_event_.y);
                 }
                 else if (mode == list_mode::auto_select)
                 {
                     update_selected_item(ev.mouse_event_.y);
                 }
-                auto parent__ = parent_.lock();
-                if (parent__)
-                {
-                    set_cursor(parent__->context(), cursor::default_);
-                }
+                set_cursor(parent_, cursor::default_);
             }
             break;
             case mouse_event_type::wheel:
@@ -288,117 +273,300 @@ void list::receive_control_events(const event &ev)
         switch (ev.keyboard_event_.type)
         {
             case keyboard_event_type::down:
-                active_item_ = -1;
                 switch (ev.keyboard_event_.key[0])
                 {
-                    case vk_home: case vk_nhome:
-                    {
-                        if (selected_item_ != 0)
+                    case vk_esc:
+                        if (item_count > 0 && active_item_ >= 0)
                         {
-                            vert_scroll->set_scroll_pos(0);
-                            selected_item_ = 0;
+                            active_item_ = -1;
                             redraw();
                         }
-                    }
+                        break;
+                    case vk_home: case vk_nhome:
+                        if (mode != list_mode::auto_select && !keyboard_auto_select)
+                        {
+                            if (item_count > 0 && active_item_ != 0)
+                            {
+                                vert_scroll->set_scroll_pos(0);
+
+                                active_item_ = 0;
+                                redraw();
+                            }
+                        }
+                        else
+                        {
+                            if (item_count > 0 && selected_item_ != 0)
+                            {
+                                vert_scroll->set_scroll_pos(0);
+
+                                selected_item_ = 0;
+                                active_item_ = -1;
+                                redraw();
+
+                                if (item_change_callback)
+                                {
+                                    lock_changes_item_count = true;
+                                    item_change_callback(selected_item_);
+                                    lock_changes_item_count = false;
+                                }
+                            }
+                        }
                     break;
                     case vk_end: case vk_nend:
-                    {
-                        if (selected_item_ != item_count - 1)
+                        if (mode != list_mode::auto_select && !keyboard_auto_select)
                         {
-                            vert_scroll->set_scroll_pos(scroll_area - position_.height());
+                            if (item_count > 0 && active_item_ != item_count - 1)
+                            {
+                                vert_scroll->set_scroll_pos(scroll_area);
 
-                            selected_item_ = static_cast<int32_t>(item_count - 1);
-                            redraw();
+                                active_item_ = item_count - 1;
+                                redraw();
+                            }
                         }
-                    }
+                        else
+                        {
+                            if (item_count > 0 && selected_item_ != item_count - 1)
+                            {
+                                vert_scroll->set_scroll_pos(scroll_area);
+
+                                selected_item_ = item_count - 1;
+                                active_item_ = -1;
+                                redraw();
+                                if (item_change_callback)
+                                {
+                                    lock_changes_item_count = true;
+                                    item_change_callback(selected_item_);
+                                    lock_changes_item_count = false;
+                                }
+                            }
+                        }
                     break;
                     case vk_up: case vk_nup:
-                        if (selected_item_ != 0)
+                        if (mode != list_mode::auto_select
+                            && ((!keyboard_auto_select && vk_alt != ev.keyboard_event_.modifier)
+                                ||(keyboard_auto_select && vk_alt == ev.keyboard_event_.modifier))
+                            )
                         {
-                            --selected_item_;
-
-                            auto selected_item_top = get_item_top(selected_item_);
-                            if (selected_item_top < vert_scroll->get_scroll_pos())
+                            if (item_count > 0 &&
+                                (active_item_ > 0 || active_item_ < 0))
                             {
-                                vert_scroll->set_scroll_pos(selected_item_top);
+                                if (active_item_ < 0)
+                                {
+                                    active_item_ = selected_item_ > 0 ?
+                                        selected_item_ : 1;
+                                }
+
+                                --active_item_;
+
+                                auto selected_item_top = get_item_top(active_item_);
+                                if (selected_item_top < vert_scroll->get_scroll_pos())
+                                {
+                                    vert_scroll->set_scroll_pos(active_item_);
+                                }
+
+                                redraw();
                             }
-
-                            redraw();
-
-                            if (item_change_callback)
+                        }
+                        else
+                        {
+                            if (item_count > 0 && selected_item_ > 0)
                             {
-                                item_change_callback(selected_item_);
+                                --selected_item_;
+
+                                auto selected_item_top = get_item_top(selected_item_);
+                                if (selected_item_top < vert_scroll->get_scroll_pos())
+                                {
+                                    vert_scroll->set_scroll_pos(selected_item_top);
+                                }
+
+                                active_item_ = -1;
+                                redraw();
+
+                                if (item_change_callback)
+                                {
+                                    lock_changes_item_count = true;
+                                    item_change_callback(selected_item_);
+                                    lock_changes_item_count = false;
+                                }
                             }
                         }
                     break;
                     case vk_down: case vk_ndown:
-                        if (selected_item_ != item_count - 1)
+                        if (mode != list_mode::auto_select
+                            && ((!keyboard_auto_select && vk_alt != ev.keyboard_event_.modifier)
+                                || (keyboard_auto_select && vk_alt == ev.keyboard_event_.modifier))
+                            )
                         {
-                            ++selected_item_;
-
-                            auto selected_item_bottom = get_item_top(selected_item_) + get_item_height(selected_item_);
-                            if (selected_item_bottom > position_.height())
+                            if (item_count > 0 && active_item_ < item_count - 1)
                             {
-                                vert_scroll->set_scroll_pos(selected_item_bottom - position_.height() + title_height);
+                                if (active_item_ < 0)
+                                {
+                                    active_item_ = (selected_item_ >= 0 ?
+                                        (selected_item_ < item_count - 1 ?
+                                            selected_item_ : item_count - 2): 0);
+                                }
+
+                                ++active_item_;
+
+                                auto selected_item_bottom = get_item_top(active_item_)
+                                    + get_item_height(active_item_) + title_height;
+                                if (selected_item_bottom > position_.height())
+                                {
+                                    vert_scroll->set_scroll_pos(selected_item_bottom - position_.height());
+                                }
+
+                                redraw();
                             }
-
-                            redraw();
-
-                            if (item_change_callback)
+                        }
+                        else
+                        {
+                            if (item_count > 0 && selected_item_ < item_count - 1)
                             {
-                                item_change_callback(selected_item_);
+                                ++selected_item_;
+
+                                auto selected_item_bottom = get_item_top(selected_item_)
+                                    + get_item_height(selected_item_) + title_height;
+                                if (selected_item_bottom > position_.height())
+                                {
+                                    vert_scroll->set_scroll_pos(selected_item_bottom - position_.height());
+                                }
+
+                                active_item_ = -1;
+                                redraw();
+
+                                if (item_change_callback)
+                                {
+                                    lock_changes_item_count = true;
+                                    item_change_callback(selected_item_);
+                                    lock_changes_item_count = false;
+                                }
                             }
                         }
                     break;
                     case vk_page_up: case vk_npage_up:
-                        if (selected_item_ != 0)
+                        if (mode != list_mode::auto_select && !keyboard_auto_select)
                         {
-                            const int32_t diff_scroll = 10;
-
-                            if (selected_item_ > diff_scroll)
+                            if (item_count > 0 && active_item_ != 0)
                             {
-                                selected_item_ -= diff_scroll;
+                                constexpr int32_t diff_scroll = 10;
+
+                                if (active_item_ < 0)
+                                {
+                                    active_item_ = selected_item_ > 0 ?
+                                        selected_item_ : 1;
+                                }
+
+                                if (active_item_ > diff_scroll)
+                                {
+                                    active_item_ -= diff_scroll;
+                                }
+                                else
+                                {
+                                    active_item_ = 0;
+                                }
+
+                                vert_scroll->set_scroll_pos(get_item_top(active_item_));
+
+                                redraw();
                             }
-                            else
+                        }
+                        else
+                        {
+                            if (item_count > 0 && selected_item_ != 0)
                             {
-                                selected_item_ = 0;
-                            }
+                                constexpr int32_t diff_scroll = 10;
 
-                            vert_scroll->set_scroll_pos(get_item_top(selected_item_));
+                                if (selected_item_ > diff_scroll)
+                                {
+                                    selected_item_ -= diff_scroll;
+                                }
+                                else
+                                {
+                                    selected_item_ = 0;
+                                }
 
-                            redraw();
+                                vert_scroll->set_scroll_pos(get_item_top(selected_item_));
 
-                            if (item_change_callback)
-                            {
-                                item_change_callback(selected_item_);
+                                active_item_ = -1;
+                                redraw();
+
+                                if (item_change_callback)
+                                {
+                                    lock_changes_item_count = true;
+                                    item_change_callback(selected_item_);
+                                    lock_changes_item_count = false;
+                                }
                             }
                         }
                     break;
                     case vk_page_down: case vk_npage_down:
-                        if (selected_item_ != item_count - 1 && item_count != 0)
+                        if (mode != list_mode::auto_select && !keyboard_auto_select)
                         {
-                            int32_t diff_scroll = 10;
-                            if (diff_scroll > item_count)
+                            if (item_count > 0 && active_item_ < item_count - 1)
                             {
-                                diff_scroll = item_count;
+                                int32_t diff_scroll = 10;
+                                if (diff_scroll > item_count)
+                                {
+                                    diff_scroll = item_count;
+                                }
+
+                                if (active_item_ < 0)
+                                {
+                                    active_item_ = selected_item_ > 0 ?
+                                        selected_item_ : 0;
+                                }
+
+                                if (active_item_ < item_count - diff_scroll)
+                                {
+                                    active_item_ += diff_scroll;
+                                }
+                                else
+                                {
+                                    active_item_ = item_count - 1;
+                                }
+
+                                vert_scroll->set_scroll_pos(get_item_top(active_item_)
+                                    + get_item_height(active_item_) - position_.height() + title_height);
+
+                                redraw();
                             }
-
-                            if (selected_item_ < item_count - diff_scroll)
+                        }
+                        else
+                        {
+                            if (item_count > 0 && selected_item_ < item_count - 1)
                             {
-                                selected_item_ += diff_scroll;
-                            }
-                            else
-                            {
-                                selected_item_ = static_cast<int32_t>(item_count - 1);
-                            }
+                                int32_t diff_scroll = 10;
+                                if (diff_scroll > item_count)
+                                {
+                                    diff_scroll = item_count;
+                                }
 
-                            vert_scroll->set_scroll_pos(get_item_top(selected_item_) + get_item_height(selected_item_) - position_.height() + title_height);
+                                if (selected_item_ < 0)
+                                {
+                                    selected_item_ = 0;
+                                }
 
-                            redraw();
+                                if (selected_item_ < item_count - diff_scroll)
+                                {
+                                    selected_item_ += diff_scroll;
+                                }
+                                else
+                                {
+                                    selected_item_ = item_count - 1;
+                                }
 
-                            if (item_change_callback)
-                            {
-                                item_change_callback(selected_item_);
+                                active_item_ = -1;
+                                vert_scroll->set_scroll_pos(get_item_top(selected_item_)
+                                    + get_item_height(selected_item_) - position_.height() + title_height);
+
+                                redraw();
+
+                                if (item_change_callback)
+                                {
+                                    lock_changes_item_count = true;
+                                    item_change_callback(selected_item_);
+                                    lock_changes_item_count = false;
+                                }
                             }
                         }
                     break;
@@ -429,12 +597,25 @@ void list::receive_control_events(const event &ev)
             break;
             case internal_event_type::remove_focus:
                 focused_ = false;
+                active_item_ = -1;
 
                 vert_scroll->hide();
 
                 redraw();
             break;
             case internal_event_type::execute_focused:
+                if (active_item_ >= 0 && active_item_ < item_count
+                    && selected_item_ != active_item_)
+                {
+                    selected_item_ = active_item_;
+                    redraw();
+
+                    if (item_change_callback)
+                    {
+                        item_change_callback(selected_item_);
+                    }
+                }
+
                 if (selected_item_ != -1 && item_activate_callback)
                 {
                     item_activate_callback(selected_item_);
@@ -444,22 +625,67 @@ void list::receive_control_events(const event &ev)
     }
 }
 
+int32_t list::check_items_height(const int32_t height)
+{
+    int32_t h = 0;
+    for (int32_t i = 0; i < item_count; ++i)
+    {
+        const auto item_height = get_item_height(i);
+        if (item_height != -1)
+        {
+            h += item_height;
+            if (h >= height)
+            {
+                return h - item_height;
+            }
+        }
+    }
+    return height;
+}
+
+rect list::get_preferred_size(const int32_t height)
+{
+    int32_t w = 0;
+    for (auto& cc: columns_)
+    {
+        w += cc.width + column_ident_;
+    }
+    if (w)
+        w -= column_ident_;
+    const auto h = check_items_height(height - title_height - theme_data_.border_width)
+        + title_height + 2 * theme_data_.border_width + theme_data_.item_indent;
+    return { 0, 0,
+        w + 2 * (theme_data_.border_width + theme_data_.item_indent), h };
+}
+
+void list::move(const int32_t dx, const int32_t dy)
+{
+    position_.move(dx, dy);
+    set_position(position_);
+}
+
+void list::update_scroll(const bool changed)
+{
+    const auto border_width = theme_data_.border_width / 2;
+    vert_scroll->set_position(
+        {
+            position_.right - border_width - scroll::full_scrollbar_size,
+            position_.top + title_height + border_width,
+            position_.right - border_width,
+            position_.bottom - border_width - theme_data_.item_indent
+        });
+
+    if (changed)
+    {
+        update_scroll_area();
+    }
+}
+
 void list::set_position(const rect& position__)
 {
-    const auto height = position__.height();
-    const bool height_changed = height != position_.height();
-
+    const bool changed = position__.height() != position_.height();
     position_ = position__;
-
-    const auto border_width = theme_dimension(tcn, tv_border_width, theme_) / 2;
-
-    vert_scroll->set_position({ position_.right - 14 - border_width,
-        position_.top + border_width,
-        position_.right - border_width,
-        position_.bottom - border_width });
-
-    if (height_changed)
-        update_scroll_area();
+    update_scroll(changed);
 }
 
 rect list::position() const
@@ -538,6 +764,34 @@ void list::update_theme_control_name(std::string_view theme_control_name)
     update_theme(theme_);
 }
 
+void list::update_theme_data()
+{
+    theme_data_.background = theme_color(tcn, tv_background, theme_);
+    theme_data_.border = theme_color(tcn, tv_border, theme_);
+    theme_data_.hover_border = theme_color(tcn, tv_hover_border, theme_);
+    theme_data_.focused_border = theme_color(tcn, tv_focused_border, theme_);
+    theme_data_.title = theme_color(tcn, tv_title, theme_);
+    theme_data_.title_column = theme_color(tcn, tv_title_column, theme_);
+    theme_data_.title_text = theme_color(tcn, tv_title_text, theme_);
+    theme_data_.selected_item = theme_color(tcn, tv_selected_item, theme_);
+    theme_data_.active_item = theme_color(tcn, tv_active_item, theme_);
+
+    theme_data_.border_width = theme_dimension(tcn, tv_border_width, theme_);
+    theme_data_.round = theme_dimension(tcn, tv_round, theme_);
+
+    theme_data_.border_item = theme_dimension(tcn, tv_border_item, theme_);
+
+    theme_data_.item_indent = theme_dimension(tcn, tv_item_indent, theme_);
+
+    if (theme_data_.round
+        && (theme_data_.item_indent < theme_data_.round - theme_data_.border_width - 1))
+    {
+        theme_data_.item_indent = theme_data_.round - theme_data_.border_width - 1;
+    }
+
+    theme_data_.font_ = std::move(theme_font(tcn, tv_font, theme_));
+}
+
 void list::update_theme(std::shared_ptr<i_theme> theme__)
 {
     if (theme_ && !theme__)
@@ -546,9 +800,27 @@ void list::update_theme(std::shared_ptr<i_theme> theme__)
     }
     theme_ = theme__;
 
+    const auto border_width_old = theme_data_.border_width;
+    const auto font_size_old = theme_data_.font_.size;
+    const auto item_indent_old = theme_data_.item_indent;
+    update_theme_data();
+
+    const auto title_height_old = title_height;
+    calc_title_height();
+
     if (mem_gr)
     {
-        mem_gr->set_background_color(theme_color(tcn, tv_background, theme__));
+        mem_gr->set_background_color(theme_data_.background);
+    }
+
+    if ((title_height_old != title_height
+        || border_width_old != theme_data_.border_width
+        || font_size_old != theme_data_.font_.size
+        || item_indent_old != theme_data_.item_indent
+        )
+        && !position_.is_hide())
+    {
+        update_scroll(true);
     }
 }
 
@@ -557,12 +829,10 @@ void list::show()
     if (!showed_)
     {
         showed_ = true;
-
         if (has_scrollbar())
         {
             vert_scroll->show();
         }
-
         redraw();
     }
 }
@@ -579,7 +849,7 @@ void list::hide()
         if (parent__)
         {
             auto pos = position();
-            pos.widen(theme_dimension(tcn, tv_border_width, theme_));
+            pos.widen(theme_data_.border_width);
             parent__->redraw(pos, true);
         }
     }
@@ -592,14 +862,20 @@ bool list::showed() const
 
 void list::enable()
 {
-    enabled_ = true;
-    redraw();
+    if (!enabled_)
+    {
+        enabled_ = true;
+        redraw();
+    }
 }
 
 void list::disable()
 {
-    enabled_ = false;
-    redraw();
+    if (enabled_)
+    {
+        enabled_ = false;
+        redraw();
+    }
 }
 
 bool list::enabled() const
@@ -610,8 +886,12 @@ bool list::enabled() const
 void list::update_columns(const std::vector<column> &columns__)
 {
     columns_ = columns__;
-    title_height = -1;
-    redraw();
+    calc_title_height();
+    if (!position_.is_hide())
+    {
+        update_scroll(true); //��� ���������� columns ����� set_position,
+        redraw();
+    }
 }
 
 const std::vector<list::column> &list::columns()
@@ -624,8 +904,14 @@ void list::set_mode(list_mode mode_) noexcept
     mode = mode_;
 }
 
+// TODO: int64_t
 void list::select_item(int32_t n_item)
 {
+    if (n_item < 0 || n_item >= item_count)
+    {
+        return;
+    }
+
     selected_item_ = n_item;
 
     redraw();
@@ -636,48 +922,58 @@ void list::select_item(int32_t n_item)
     }
 }
 
-int32_t list::selected_item() const noexcept
-{
-    return selected_item_;
-}
-
+// TODO: int64_t n_column
 void list::set_column_width(int32_t n_column, int32_t width)
 {
-    if (static_cast<int32_t>(columns_.size()) > n_column)
+    if (n_column >= static_cast<int32_t>(columns_.size()))
     {
         columns_[n_column].width = width;
         redraw();
     }
 }
 
-int32_t list::get_item_height(int32_t n_item) const
+int32_t list::get_item_height(int32_t nItem) const
 {
     int32_t height = -1;
-    if (item_height_callback)
+    if (item_height_callback && nItem >= 0)
     {
-        item_height_callback(n_item, height);
+        item_height_callback(nItem, height);
     }
-    return height;
+    return height <= 0 ? -1 :
+        (height < theme_data_.font_.size + 2 * theme_data_.border_item
+            ? theme_data_.font_.size + 2 * theme_data_.border_item : height);
 }
 
 void list::set_item_count(int32_t count)
 {
+    if (count < 0 || lock_changes_item_count)
+    {
+        return;
+    }
+
     item_count = count;
+
+    if (-1 != selected_item_ && selected_item_ >= count)
+    {
+        selected_item_ = -1;
+        if (item_change_callback)
+        {
+            item_change_callback(selected_item_);
+        }
+    }
 
     update_scroll_area();
 
-    redraw();
-}
-
-int32_t list::get_item_count() const noexcept
-{
-    return item_count;
+    if (!position_.is_hide())
+    {
+        redraw();
+    }
 }
 
 void list::make_selected_visible()
 {
     const auto area = position_.height();
-    if (area <= 0)
+    if (area <= 0 || selected_item_ < 0)
     {
         return;
     }
@@ -687,8 +983,8 @@ void list::make_selected_visible()
     const auto selected_top = get_item_top(selected_item_);
     const auto selected_bottom = selected_top + get_item_height(selected_item_);
 
-    const auto visible_top = scroll_pos,
-         visible_bottom = scroll_pos + area;
+    const auto visible_top = scroll_pos;
+    const auto visible_bottom = scroll_pos + area;
 
     if (selected_top < visible_top || selected_bottom > visible_bottom)
     {
@@ -717,46 +1013,50 @@ int32_t list::get_item_top(int32_t n_item) const
 
     int32_t top = 0;
 
-    for (int32_t i = 0; i != n_item; ++i)
+    for (int32_t i = 0; i < n_item; ++i)
     {
-        auto height = get_item_height(i);
-        top += height != -1 ? height : 0;
+        const auto height = get_item_height(i);
+        if (height != -1)
+        {
+            top += height;
+        }
     }
 
     return top;
 }
 
-void list::set_draw_callback(std::function<void(graphic&, int32_t, const rect&, item_state state)> draw_callback_)
+void list::set_draw_callback(std::function<void(graphic&, const int32_t nItem,
+    const rect&, const item_state state)> draw_callback_) noexcept
 {
     draw_callback = draw_callback_;
 }
 
-void list::set_item_height_callback(std::function<void(int32_t, int32_t&)> item_height_callback_)
+void list::set_item_height_callback(std::function<void(int32_t, int32_t&)> item_height_callback_) noexcept
 {
     item_height_callback = item_height_callback_;
 }
 
-void list::set_item_click_callback(std::function<void(click_button, int32_t, int32_t, int32_t)> item_click_callback_)
+void list::set_item_click_callback(std::function<void(click_button, int32_t, int32_t, int32_t)> item_click_callback_) noexcept
 {
     item_click_callback = item_click_callback_;
 }
 
-void list::set_item_change_callback(std::function<void(int32_t)> item_change_callback_)
+void list::set_item_change_callback(std::function<void(int32_t)> item_change_callback_) noexcept
 {
     item_change_callback = item_change_callback_;
 }
 
-void list::set_item_activate_callback(std::function<void(int32_t)> item_activate_callback_)
+void list::set_item_activate_callback(std::function<void(int32_t)> item_activate_callback_) noexcept
 {
     item_activate_callback = item_activate_callback_;
 }
 
-void list::set_column_click_callback(std::function<void(int32_t)> column_click_callback_)
+void list::set_column_click_callback(std::function<void(int32_t)> column_click_callback_) noexcept
 {
     column_click_callback = column_click_callback_;
 }
 
-void list::set_scroll_callback(std::function<void(scroll_state, int32_t)> scroll_callback_)
+void list::set_scroll_callback(std::function<void(scroll_state, int32_t)> scroll_callback_) noexcept
 {
     scroll_callback = scroll_callback_;
 }
@@ -779,7 +1079,7 @@ void list::redraw()
         if (parent__)
         {
             auto pos = position();
-            pos.widen(theme_dimension(tcn, tv_border_width, theme_));
+            pos.widen(theme_data_.border_width);
             parent__->redraw(pos);
         }
     }
@@ -787,7 +1087,7 @@ void list::redraw()
 
 void list::redraw_item(int32_t item)
 {
-    if (showed_)
+    if (showed_ && item >= 0)
     {
         const auto control_pos = position();
 
@@ -801,46 +1101,90 @@ void list::redraw_item(int32_t item)
             auto height = get_item_height(item);
             if (height != -1)
             {
-                parent__->redraw({ control_pos.left, top, control_pos.right, top + height + 1 });
+                parent__->redraw({ control_pos.left, top, control_pos.right, top + height});
             }
         }
     }
 }
 
-void list::calc_title_height(graphic &gr_)
+void list::calc_title_height()
 {
-    (void)gr_; // Unused in this implementation
-    auto font = theme_font(tcn, tv_font, theme_);
-
-    if (title_height == -1)
+    if (columns_.empty())
     {
-        if (columns_.empty())
-        {
-            title_height = 0;
-            return;
-        }
-
-        title_height = font.size + text_indent * 2;
+        title_height = 0;
+        return;
     }
+
+    title_height = theme_data_.font_.size + text_indent * 2;
+}
+
+int32_t list::get_left_position_text(int32_t n_col) const noexcept
+{
+    if (n_col <= 0 || n_col >= columns_.size())
+        return text_indent;
+    int32_t width = columns_[0].width;
+    for (int n = 1; n < n_col; ++n)
+    {
+        width += columns_[n].width;
+    }
+    return text_indent + column_ident_ * n_col + width;
 }
 
 void list::draw_titles(graphic &gr_)
 {
-    auto font = theme_font(tcn, tv_font, theme_);
+    // check rect`s width
+    const auto control_pos = position();
+    rect rc{
+        control_pos.left,
+        control_pos.top + theme_data_.border_width,
+        control_pos.left + position_.width(),
+        control_pos.top + title_height + theme_data_.border_width
+    };
+    gr_.draw_rect(rc, make_color(0, 0, 0, 0), theme_data_.title,
+        0, theme_data_.round);
 
-    auto title_color = theme_color(tcn, tv_title, theme_);
-    auto title_text_color = theme_color(tcn, tv_title_text, theme_);
-
-    int32_t left = 0;
-
-    gr_.draw_rect({ left, 0, position_.width() - 1, title_height }, title_color);
-
-    for (auto &c : columns_)
+    if (theme_data_.round)
     {
-        gr_.draw_rect({ left, 0, left + c.width - 1, title_height }, title_color);
-        gr_.draw_text({ left + text_indent, text_indent, 0, 0 }, c.caption, title_text_color, font);
+        // TODO: tmp, remove? make extended draw_rect()
+        rc.top = rc.bottom - theme_data_.round;
+        gr_.draw_rect(rc, make_color(0, 0, 0, 0), theme_data_.title, 0, 0);
+    }
 
-        left += c.width + 1;
+    const auto top = control_pos.top + theme_data_.border_width + 1;
+    const auto bottom = control_pos.top + theme_data_.border_width
+        + title_height - 1;// theme_data_.item_indent;
+
+    const auto right = control_pos.left + position_.width()
+        - theme_data_.border_width - theme_data_.item_indent;
+
+    int32_t left = control_pos.left
+        + theme_data_.border_width + theme_data_.item_indent;//
+
+    for (size_t i = 0; i < columns_.size(); ++i)
+    {
+        const auto& c = columns_[i];
+        auto r = left + c.width;
+        if (r >= right)
+        {
+            r = right;
+        }
+        const auto w = r - left;
+        if (w <= 0)
+        {
+            break;
+        }
+
+        // TODO: add move div
+        gr_.draw_rect({ r - 1, top, r + 1, bottom },
+            theme_data_.title_column);
+
+        if (w + text_indent > 0)
+        {
+            gr_.draw_text({ left + text_indent, control_pos.top + text_indent, 0, 0 },
+                c.caption, theme_data_.title_text, theme_data_.font_);
+        }
+
+        left += w + column_ident_;
     }
 }
 
@@ -852,7 +1196,7 @@ void list::draw_items(graphic &gr_)
     }
 
     int32_t first_item = -1, item_bottom = 0;
-    auto scroll_pos = vert_scroll->get_scroll_pos();
+    const auto scroll_pos = vert_scroll->get_scroll_pos(); // + title_height;
     while (scroll_pos >= item_bottom && first_item < item_count)
     {
         ++first_item;
@@ -876,31 +1220,28 @@ void list::draw_items(graphic &gr_)
         last_item = item_count;
     }
 
-    constexpr int32_t left = 0;
-    const int32_t top_ = title_height - scroll_pos,
-        right = position_.width();
+    const auto control_pos = position();
+    const int32_t top_ = -vert_scroll->get_scroll_pos(); // +1
+    const int32_t right = position_.width()
+        - 2 * (theme_data_.border_width - theme_data_.item_indent);
 
-    for (auto item = first_item; item != last_item; ++item)
+    for (auto item = first_item; item < last_item; ++item)
     {
-        const auto item_height = get_item_height(item);
-        const auto top = get_item_top(item) + top_;
-
-        const rect item_rect{ left, top,
-            right - (has_scrollbar() ?
-                (vert_scroll->get_scroll_view() == scroll_view::full ?
-                    14 : 3) : 0), top + item_height };
-
         item_state state = item_state::normal;
-
-        if (item == active_item_)
-        {
-            state = item_state::active;
-        }
         if (item == selected_item_)
         {
             state = item_state::selected;
         }
-
+        else
+        {
+            if (item == active_item_)
+            {
+                state = item_state::active;
+            }
+        }
+        const auto item_height = get_item_height(item);
+        const auto top = get_item_top(item) + top_;
+        const rect item_rect{ 0, top, right, top + item_height };
         draw_callback(gr_, item, item_rect, state);
     }
 }
@@ -911,10 +1252,10 @@ void list::update_selected_item(int32_t y)
 
     const auto pos = (y - position().top - title_height) + scroll_pos;
 
-    int32_t item = -1, item_start = 0, item_end = 0;
+    int32_t item = -1, start_pos = 0, end_pos = 0;
     while (item != item_count)
     {
-        if (item_start <= pos && item_end > pos)
+        if (start_pos <= pos && end_pos > pos)
         {
             break;
         }
@@ -922,10 +1263,10 @@ void list::update_selected_item(int32_t y)
         {
             ++item;
         }
-        item_start = get_item_top(item);
+        start_pos = get_item_top(item);
 
         const auto height = get_item_height(item);
-        item_end = height != -1 ? item_start + height : 0;
+        end_pos = height != -1 ? start_pos + height : 0;
     }
 
     if (-1 != item && item != selected_item_)
@@ -945,8 +1286,8 @@ void list::update_selected_item(int32_t y)
         }
     }
 
-    // если item != selected_item_ необходимо вызвать item_change_callback()
-    // примером может быть реакция на изменение 2x input - simple.cpp: диалог по кнопке 'Edit'
+    // ���� item != selected_item_ ���������� ������� item_change_callback()
+    // ������ simple.cpp: ������ �� ������ 'Edit'
     if (-1 != item && selected_item_ >= 0 && item_change_callback)
     {
         item_change_callback(selected_item_);
@@ -963,10 +1304,10 @@ void list::update_active_item(int32_t y)
 
     active_item_ = -1;
 
-    int32_t item_start = 0, item_end = 0;
+    int32_t start_pos = 0, end_pos = 0;
     while (active_item_ != item_count)
     {
-        if (item_start <= pos && item_end > pos)
+        if (start_pos <= pos && end_pos > pos)
         {
             break;
         }
@@ -974,10 +1315,10 @@ void list::update_active_item(int32_t y)
         {
             ++active_item_;
         }
-        item_start = get_item_top(active_item_);
+        start_pos = get_item_top(active_item_);
 
         const auto height = get_item_height(active_item_);
-        item_end = height != -1 ? item_start + height : 0;
+        end_pos = height != -1 ? start_pos + height : 0;
     }
 
     if (prev_active_item_ != active_item_)
@@ -988,8 +1329,8 @@ void list::update_active_item(int32_t y)
 
 void list::update_scroll_area()
 {
-    scroll_area = title_height + get_item_top(item_count)
-        //+ theme_dimension(tcn, tv_border_width, theme_)
+    scroll_area = title_height// + theme_data_.border_width
+        + get_item_top(item_count)// + theme_data_.item_indent
         - position_.height();
     if (scroll_area < 0)
     {

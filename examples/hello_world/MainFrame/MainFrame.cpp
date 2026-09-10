@@ -43,7 +43,7 @@ void MainFrame::Run()
                 {
                     wui::error err;
 
-                    auto nextTheme = wui::get_next_app_theme();
+                    auto nextTheme = std::move(wui::get_next_app_theme());
                     wui::set_default_theme_from_name(nextTheme, err);
                     if (!err.is_ok())
                     {
@@ -120,18 +120,19 @@ void MainFrame::ReceiveEvents(const wui::event& ev)
 {
     if (ev.type & wui::event_type::internal)
     {
+        // The main window is already initialized (context and graphics).
+        // Font size and str length calculations are available (get_preferred_size(), measure_text(), ...).
         switch (ev.internal_event_.type)
         {
             case wui::internal_event_type::window_created:
-                // The main window is already initialized (context and graphics).
-                // Font size and str length calculations are available (get_preferred_size(), measure_text(), ...).
+                // do not create temporary ui control objects
                 window->add_control(logoImage, { 0 });
                 window->add_control(whatsYourNameText, { 0 });
                 window->add_control(userNameInput, { 0 });
                 window->add_control(okButton, { 0 });
 
                 window->set_default_push_control(okButton);
-                UpdateControlsPosition();
+                //UpdateControlsPosition();
                 break;
             case wui::internal_event_type::size_changed:
                 if (window->state() == wui::window_state::normal &&

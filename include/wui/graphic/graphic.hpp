@@ -28,6 +28,7 @@ struct _cairo_device;
 
 namespace wui
 {
+
 class graphic
 {
 public:
@@ -43,13 +44,14 @@ public:
     graphic() = default;
     ~graphic();
 
-    [[nodiscard]] bool init(const rect& max_size, const color background_color);
+    [[nodiscard]] bool init(const rect& max_size,
+        const color background_color, const bool clear_ = true);
     void release();
     [[nodiscard]] bool inited() const noexcept;
 
     [[nodiscard]] rect max_size() const noexcept;
 
-    void set_background_color(color background_color);
+    void set_background_color(color background_color, const bool clear_ = true);
 
     void clear(const rect& position = { 0 });
 
@@ -57,7 +59,7 @@ public:
 
     void draw_pixel(const rect& position, const color color_);
 
-    /// NB: linux width = 1 always
+    ///TODO, NB: linux width = 1 always.
     void draw_line(const rect& position, const color color_, const int32_t width = 1);
 
     /// <summary>
@@ -81,23 +83,10 @@ public:
     [[nodiscard]] rect measure_text_gdiplus(std::string_view text_, const font &font__);
 #endif
 
-    /// <summary>
-    /// draw text RGB
-    /// </summary>
-    /// <param name="position"></param>
-    /// <param name="text"></param>
-    /// <param name="color_"></param>
-    /// <param name="font_"></param>
-    void draw_text(const rect& position, std::string_view text, const color color_, const font &font_);
+    void draw_text(const rect& position, std::string_view text,
+        const color color_, const font &font_);
 
-    /// <summary>
-    /// draw text, support clip and alpha
-    /// </summary>
-    /// <param name="position"></param>
-    /// <param name="lines_data"></param>
-    /// <param name="color_"></param>
-    /// <param name="font__"></param>
-    /// <param name="clip_"></param>
+    /// support clip and alpha
     void draw_text_clip(const rect& position,
         const text_lines_t& lines_data,
         const color color_, const font& font__, const bool clip_);
@@ -121,8 +110,20 @@ public:
     void draw_buffer(const rect& position, uint8_t *buffer, const int32_t left_shift,
         const int32_t top_shift);
 
-    /// draw another graphic on context
+    /// deprecated : old version used (see ver. <= 1.3.260401) call
+    ///  draw_graphic({ control_pos.left, control_pos.top, control_pos.width(), control_pos.height() }, );
+    [[deprecated("deprecated, use `copy_area(control_pos, )`")]]
     void draw_graphic(const rect& position, graphic &graphic_,
+        const int32_t left_shift, const int32_t top_shift)
+    {
+        copy_area({ position.left, position.top,
+                position.left + position.right, // left + width
+                position.top + position.bottom  // top + height
+            }, graphic_, left_shift, top_shift);
+    }
+
+    /// draw another graphic area on context
+    void copy_area(const rect& position, graphic &graphic_,
         const int32_t left_shift, const int32_t top_shift);
 
 #ifdef _WIN32
@@ -138,7 +139,7 @@ public:
     }
 
     /// workaround on linux
-    void draw_surface(_cairo_surface &surface, const rect& position);
+    void draw_surface(_cairo_surface &surface, const rect& position, const bool grayscale = false);
 #endif
 
     [[nodiscard]] error get_error() const;
@@ -148,7 +149,14 @@ public:
     [[nodiscard]] static bool text_measurer_inited() noexcept;
     [[nodiscard]] static bool is_me_text_measurer(const graphic &gr) noexcept;
 
+#ifdef _WIN32
+    HBITMAP mem_bitmap;
+#endif
 private:
+#ifdef _WIN32
+    HGDIOBJ mem_bitmap_old;
+#endif
+
     system_context &context_;
 
     primitive_container pc;
@@ -159,7 +167,6 @@ private:
 
 #ifdef _WIN32
     HDC mem_dc;
-    HBITMAP mem_bitmap;
 #elif __linux__
     xcb_pixmap_t mem_pixmap;
 
@@ -170,13 +177,15 @@ private:
     error err;
 };
 
-//NB: ? добавить для совместимости с wui-1.3.260215 example simple
-//void init_text_measurer(graphic* gr) noexcept;
+//для совместимости с wui-1.3.260215 example simple
+[[deprecated("The first WUI::window during initialization creates a graphical context.")]]
+void init_text_measurer(graphic* gr) noexcept;
 
-[[nodiscard]] int32_t get_font_ideal_height(const font& font_, graphic* gr);
 [[nodiscard]] rect measure_text(std::string_view text, const font &font_, graphic *gr = nullptr);
 /// measure text, hash not use
 [[nodiscard]] rect measure_text_direct(std::string_view text, const font &font_, graphic *gr = nullptr);
+
+[[nodiscard]] int32_t get_font_ideal_height(const font& font_, graphic* gr);
 
 #ifdef _WIN32
 [[nodiscard]] int32_t get_font_ideal_height_gdiplus(const font& font_, graphic* gr);

@@ -66,6 +66,4 @@ static inline bool is_number(const std::string& s)
         s.end(), [](unsigned char c) { return !std::isdigit(c); }) == s.end();
 }
 
-// return true if string is number floating point
-// TODO: static inline bool is_number_float(const std::string& s) { ... }
 }

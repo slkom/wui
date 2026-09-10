@@ -16,7 +16,6 @@
 #include <wui/locale/locale.hpp>
 
 #include <wui/control/button.hpp>
-#include <wui/control/input.hpp>
 
 #include <wui/common/dbgtrace.hpp>
 
@@ -30,6 +29,7 @@
 #include <algorithm>
 #include <random>
 #include <iostream>
+#include <assert.h>
 
 #ifdef _WIN32
 
@@ -93,7 +93,6 @@ static void check_position(wui::rect& pos, const wui::system_context& context_ [
     {
         pos.left = 0;
         const auto width = pos.width();
-        // NB: сохраняет размер окна (старое решение для нечетных width => width - 1)
         pos.left = work_area.left + (work_area.width() - width) / 2;
         pos.right = pos.left + width;
     }
@@ -175,7 +174,7 @@ static void remove_window_decorations(wui::system_context &context)
 
 static wui::rect get_window_size(wui::system_context &context)
 {
-    if (context.connection) // проверка уже не нужна, так как display не закрыт, не выполнена listener::stop()
+    if (context.connection)
     {
         auto geom = xcb_get_geometry_reply(context.connection, xcb_get_geometry(context.connection, context.wnd), nullptr);
         if (geom)
@@ -202,22 +201,19 @@ window::window(std::string_view theme_control_name, std::shared_ptr<i_theme> the
     theme_(theme_),
     showed_(true), enabled_(true), root_window_(false),
     skip_draw_(false),
-    focused_index(0),
-    docked_(false),
     moving_mode_(moving_mode::none),
     x_click{ 0 }, y_click{ 0 },
     switch_lang_button(std::make_shared<button>(locale(tcn, cl_switch_lang), std::bind(&window::switch_lang, this), button_view::image, theme_image(ti_switch_lang), 24, button::tc_tool)),
     switch_theme_button(std::make_shared<button>(locale(tcn, cl_light_theme), std::bind(&window::switch_theme, this), button_view::image, theme_image(ti_switch_theme), 24, button::tc_tool)),
     pin_button(std::make_shared<button>(locale(tcn, cl_pin), std::bind(&window::pin, this), button_view::image, theme_image(ti_pin), 24, button::tc_tool)),
-    minimize_button(std::make_shared<button>("", std::bind(&window::minimize, this), button_view::image, theme_image(ti_minimize), 24, button::tc_tool)),
-    expand_button(std::make_shared<button>("", [this]() { window_state_ == window_state::normal ? expand() : normal(); }, button_view::image, window_state_ == window_state::normal ? theme_image(ti_expand) : theme_image(ti_normal), 24, button::tc_tool)),
-    close_button(std::make_shared<button>("", std::bind(&window::close, this), button_view::image, theme_image(ti_close), 24, button::tc_tool_red)),
+    minimize_button(std::make_shared<button>("", [this]() { minimize(); }, button_view::image, theme_image(ti_minimize), 24, button::tc_tool)),
+    expand_button(std::make_shared<button>("", [this]() { state() != window_state::maximized ? expand() : normal(); }, button_view::image, window_state_ == window_state::normal ? theme_image(ti_expand) : theme_image(ti_normal), 24, button::tc_tool)),
+    close_button(std::make_shared<button>("", [this]() { close(); }, button_view::image, theme_image(ti_close), 24, button::tc_tool_red)),
 #ifdef _WIN32
     mouse_tracked(false),
     device_change_handling(false),
     dev_notify_handle(0)
 #elif __linux__
-    wm_protocols_event(), wm_delete_msg(), wm_change_state(), net_wm_state(), net_wm_state_focused(), net_wm_state_above(), net_wm_state_skip_taskbar(), net_wm_name(), utf8_string(), net_active_window(), net_wm_state_fullscreen(), net_wm_state_maximized_vert(), net_wm_state_maximized_horz(), net_wm_moveresize(),
     prev_button_click(0),
     udev_handler_(),
     key_modifier(0)
@@ -233,9 +229,16 @@ window::window(std::string_view theme_control_name, std::shared_ptr<i_theme> the
 
 window::~window()
 {
+    active_control.reset();
+    input_control.reset();
+    focused_control.reset();
     auto parent__ = parent_.lock();
     if (parent__)
     {
+        if (parent__->selected_child == shared_from_this())
+        {
+            parent__->selected_child.reset();
+        }
         parent__->remove_control(shared_from_this());
     }
 #ifdef _WIN32
@@ -250,27 +253,55 @@ window::~window()
 
 void window::add_control(std::shared_ptr<i_control> control, const rect& control_position)
 {
-    if (std::find(controls.begin(), controls.end(), control) == controls.end())
+    if (std::find(controls.begin(), controls.end(), control) != controls.end())
     {
-        if (close_callback && context_.physical())
+        return;
+    }
+#ifndef NDEBUG
+    if (!control || this == control.get())
+    {
+        assert(0);
+    }
+#endif
+
+    std::shared_ptr<window> wnd = std::dynamic_pointer_cast<window>(control);
+    if (wnd)
+    {
+        if (close_callback && context_.physical() && wnd->context_.physical())
         {
-            auto w = dynamic_cast<window*>(control.get());
-            if (w && w->context_.physical())
-            {
-                // Блокируем close_callback_ (так как окно логически не
-                // закрывается, а перемещается в parent)
-                w->disable_close_callback = true;
-            }
+            // Блокируем close_callback_ (так как окно логически не
+            // закрывается, а перемещается в parent)
+            wnd->disable_close_callback = true;
         }
 
-        control->set_parent(shared_from_this());
-        control->set_position(control_position);
-
-        controls.emplace_back(control);
-        if (!control->position().empty())
+        wnd->focused_control.reset();
+        wnd->input_control.reset();
+        if (wnd->selected_child)
         {
-            redraw(control->position());
+            wnd->selected_child->focused_ = false;
+            wnd->selected_child.reset();
         }
+    }
+
+    control->set_parent(shared_from_this());
+    control->set_position(control_position);
+
+    controls.emplace_back(control);
+
+    if (!input_control
+        && (focus_mode::always & get_focus_mode())
+        && (focus_mode::fixed & control->get_focus_mode()))
+    {
+        input_control = control;
+    }
+    if (!control->position().empty())
+    {
+        // TODO ?: при иниц. можно сократить старт и код, если
+        // изначально control->showed_{false},
+        // но придется в ctrl`s добавить поле showed_setup...
+        // и добавить код в control->set_position() и тп
+        //control->show();
+        redraw(control->position());
     }
 }
 
@@ -284,7 +315,51 @@ void window::remove_control(std::shared_ptr<i_control> control)
     auto exists = std::find(controls.begin(), controls.end(), control);
     if (exists != controls.end())
     {
+        if (control == focused_control)
+        {
+            if (control == focused_control)
+            {
+                focused_control.reset();
+            }
+        }
+
+        auto wnd = std::dynamic_pointer_cast<window>(control);
+        if (wnd)
+        {
+            if (wnd->focused_control)
+            {
+                event ev;
+                ev.type = event_type::internal;
+                ev.internal_event_ = internal_event{ internal_event_type::remove_focus };
+                wnd->send_event_to_control(wnd->focused_control, ev);
+
+                wnd->focused_control.reset();
+            }
+
+            wnd->input_control.reset();
+
+            if (wnd->selected_child)
+            {
+                wnd->selected_child->remove_focus();
+                wnd->selected_child->focused_ = false;
+                wnd->selected_child.reset();
+            }
+        }
+        if (control == selected_child)
+        {
+            selected_child->remove_focus();
+            selected_child->focused_ = false;
+            selected_child.reset();
+        }
+
+        const bool t = (control == input_control);
         controls.erase(exists);
+        if (t)
+        {
+            input_control.reset();
+            setup_input_focused();
+        }
+
     }
 
     if (control == docked_control)
@@ -424,45 +499,49 @@ void window::draw(graphic &gr, const rect& paint_rect)
         return;
     }
 
-    constexpr int32_t caption_space = 10;
-    auto border_color = theme_color(tcn, tv_border, theme_);
+    const auto border_color = theme_color(tcn, tv_border, theme_);
     const auto background_color = theme_color(tcn, tv_background, theme_);
-    const auto border_width = theme_dimension(tcn, tv_border_width, theme_);
     const auto round = theme_dimension(tcn, tv_round, theme_);
     const auto window_pos = position();
-    /*
-    constexpr bool test1 = (!(window_style::border_left & window_style::border_left) ||
-        !(window_style::border_left & window_style::border_top) ||
-        !(window_style::border_left & window_style::border_right) ||
-        !(window_style::border_left & window_style::border_bottom));
-    constexpr bool test2 = (~window_style::border_left) & window_style::border_all;
-    static_assert(test1 == test1);
-    */
-
-    if ((~window_style_) & window_style::border_all)
+    const int32_t border_width = theme_dimension(tcn, tv_border_width, theme_);
+    int32_t border_rect_width = 0;
+    if (border_color != background_color
+        && 0 == ((~window_style_) & window_style::border_all))
     {
-        border_color = background_color;
+        border_rect_width = border_width;
     }
 
     gr.draw_rect(window_pos,
         border_color,
         background_color,
-        (border_color != background_color ? border_width : 0),
+        border_rect_width,
         round
     );
 
-    if (border_color == background_color)
+    if (border_color != background_color
+        && ((~window_style_) & window_style::border_all))
     {
-        draw_border(gr);
+        draw_border(gr, border_color, border_width);
+    }
+
+    if (!docked_ && !(window_style_ & window_style::topmost)
+        && focused_
+        )
+    {
+        draw_selected_border(gr, border_width);
     }
 
     if (!caption.empty() && (window_style_ & window_style::title_showed))
     {
-        gr.draw_text({ window_pos.left + caption_space,
-            window_pos.top + caption_space, 0, 0 },
+        auto caption_font = std::move(theme_font(tcn, tv_caption_font, theme_));
+        const auto h = std::max(_btn_height_child, caption_font.size);
+        auto top = (h - caption_font.size) / 2;
+
+        gr.draw_text({ window_pos.left + 5,
+            window_pos.top + border_width + top, 0, 0 },
             caption,
-            theme_color(tcn, tv_text, theme_),
-            theme_font(tcn, tv_caption_font, theme_));
+            theme_color(tcn, tv_text, theme_), // change_alpha
+            caption_font);
     }
 
     std::vector<std::shared_ptr<i_control>> topmost_controls;
@@ -516,45 +595,43 @@ void window::receive_control_events(const event &ev)
             {
                 case internal_event_type::set_focus:
                     change_focus();
-                break;
+                    if (!focused_ && !docked_ && !(window_style_ & window_style::topmost))
+                    {
+                        auto parent__ = parent_.lock();
+                        if (parent__)
+                        {
+                            parent__->selected_child = shared_from_this();
+                        }
+
+                        focused_ = true;
+                        redraw(position());
+                    }
+                    break;
                 case internal_event_type::remove_focus:
-                {
-                    size_t focusing_controls = 0;
-                    for (const auto &control : controls)
+                    remove_focus();
+                    if (focused_)
                     {
-                        if (control->focused())
+                        focused_ = false;
+                        redraw(position());
+                        auto parent__ = parent_.lock();
+                        if (parent__)
                         {
-                            event ev_;
-                            ev_.type = event_type::internal;
-                            ev_.internal_event_ = internal_event{ internal_event_type::remove_focus };
-                            send_event_to_control(control, ev_);
-
-                            ++focused_index;
-                        }
-
-                        if (control->focusing())
-                        {
-                            ++focusing_controls;
+                            parent__->selected_child.reset();
                         }
                     }
-
-                    if (focused_index > focusing_controls)
-                    {
-                        focused_index = 0;
-                    }
-                }
-                break;
+                    break;
                 case internal_event_type::execute_focused:
                     execute_focused();
                 break;
                 case internal_event_type::window_created:
                     send_event_to_plains(ev);
-
+                    update_theme();
                     redraw({ 0, 0, position_.width(), position_.height() }, true);
                 break;
             }
         break;
-        default: break;
+        default:
+            break;
     }
 }
 
@@ -579,6 +656,13 @@ void window::receive_plain_events(const event &ev)
     send_event_to_plains(ev);
 }
 
+void window::move(const int32_t dx, const int32_t dy)
+{
+    rect position = position_;
+    position.move(dx, dy);
+    set_position(position);
+}
+
 void window::set_tw_preferred_position(const int32_t width__, const int32_t height__)
 {
     auto tw = get_transient_window();
@@ -587,7 +671,7 @@ void window::set_tw_preferred_position(const int32_t width__, const int32_t heig
         return;
     }
 
-    if (!is_physical_window())
+    if (docked_) // !is_physical_window()
     {
         auto pos = position_;
         if (width__ > 0 && height__ > 0)
@@ -640,7 +724,7 @@ void window::set_position(const rect& position__)
         // далее появляется в главном окне, как должно быть.
         // Эта проблема хорошо заметна,
         // если замедлить систему (например, debug, net).
-        // xcb_aux_sync() и т.п. не решает проблему (
+        // xcb_aux_sync() и т.п. не решает проблему :(
         // win32: эта проблема не наблюдается (remote desktop не проверял).
 
         // parent_.expired(): работает так же как : false == disable_close_callback,
@@ -716,7 +800,7 @@ void window::set_parent(std::shared_ptr<window> window)
         if (context_.physical())
         {
 #ifdef _WIN32
-            DestroyWindow(context_.hwnd); // уничтожаем окно без запросов WM_CLOSE ?
+            DestroyWindow(context_.hwnd);
             //SendMessage(context_.hwnd, WM_CLOSE, 0, 0);
 #elif __linux__
             send_destroy_event();
@@ -745,6 +829,11 @@ void window::clear_parent()
     auto parent__ = parent_.lock();
     if (parent__)
     {
+        if (parent__->selected_child == shared_from_this())
+        {
+            parent__->selected_child->focused_ = false;
+            parent__->selected_child.reset();
+        }
         parent__->unsubscribe(my_control_sid);
         parent__->unsubscribe(my_plain_sid);
     }
@@ -756,7 +845,7 @@ void window::set_topmost(bool yes)
 {
     if (yes)
     {
-        set_style(static_cast<window_style>(static_cast<uint32_t>(window_style_) | static_cast<uint32_t>(window_style::topmost)));
+        set_style(window_style_ | window_style::topmost);
     }
     else
     {
@@ -793,6 +882,11 @@ bool window::focusing() const
     }
 
     return false;
+}
+
+focus_mode window::get_focus_mode() const
+{
+    return focus_mode_;
 }
 
 void window::update_theme_control_name(std::string_view theme_control_name)
@@ -974,7 +1068,7 @@ void window::pin()
 
 void window::minimize()
 {
-    if (window_state_ == window_state::minimized)
+    if (state() == window_state::minimized)
     {
         return;
     }
@@ -1007,7 +1101,12 @@ void window::minimize()
 
 void window::expand()
 {
-    if (window_state_ == window_state::maximized)
+    if (
+        state() == window_state::maximized
+#if __linux__
+        || !context_.connection
+#endif
+        )
     {
         return;
     }
@@ -1023,7 +1122,6 @@ void window::expand()
         }
     }
 
-    window_state_ = window_state::maximized;
     auto screenSize = wui::get_screen_size(context());
     auto currentPos = position();
     auto width = currentPos.width(), height = currentPos.height();
@@ -1055,10 +1153,6 @@ void window::expand()
         }
     }
 #elif __linux__
-    if (!context_.connection)
-    {
-        return;
-    }
 
     if (window_style_ & window_style::title_showed) // normal window maximization
     {
@@ -1071,8 +1165,10 @@ void window::expand()
         change_style(net_wm_state, 1, net_wm_state_fullscreen);
     }
 #endif
+
     expand_button->set_image(theme_image(ti_normal, theme_));
 }
+
 void window::close()
 {
 #ifdef _WIN32
@@ -1132,8 +1228,6 @@ void window::normal()
     }
 #endif
 
-    window_state_ = window_state::normal;
-
     if (!normal_position.is_null())
     {
 #ifdef _WIN32
@@ -1150,7 +1244,7 @@ void window::normal()
             XCB_CONFIG_WINDOW_X |
             XCB_CONFIG_WINDOW_Y |
             XCB_CONFIG_WINDOW_WIDTH |
-            XCB_CONFIG_WINDOW_HEIGHT  // | XCB_CONFIG_WINDOW_BORDER_WIDTH
+            XCB_CONFIG_WINDOW_HEIGHT
             , values);
 
         xcb_flush(context_.connection);
@@ -1243,14 +1337,24 @@ void window::set_min_size(int32_t width, int32_t height)
 void window::set_transient_for(std::shared_ptr<window> window_, bool docked__)
 {
     transient_window = window_;
-    docked_ = docked__;
+    docked_ = docked_setup = docked__;
 }
 
-void window::start_docking(std::shared_ptr<i_control> control)
+void window::start_docking(std::shared_ptr<window> control)
 {
     enabled_ = false;
 
     docked_control = control;
+
+    if (control && control->focused_)
+    {
+        control->focused_ = false;
+        if (selected_child == control)
+        {
+            selected_child->focused_ = false;
+            selected_child.reset();
+        }
+    }
 
     send_internal(internal_event_type::remove_focus, 0, 0);
 
@@ -1260,6 +1364,16 @@ void window::start_docking(std::shared_ptr<i_control> control)
 void window::end_docking()
 {
     enabled_ = true;
+
+    auto tw = parent_.lock();
+    while (tw && !tw->is_physical_window())
+    {
+        tw = tw->parent().lock();
+    }
+    if (tw)
+    {
+        tw->enabled_ = true;
+    }
 
     docked_control.reset();
 }
@@ -1351,15 +1465,6 @@ void window::enable_device_change_handling(bool yes)
 #endif
 }
 
-bool window::is_physical_window() const
-{
-#ifdef _WIN32
-    return root_window_ || (context_.hwnd != NULL);
-#elif __linux__
-    return root_window_ || (context_.connection && context_.wnd);
-#endif
-}
-
 void window::send_event_to_control(const std::shared_ptr<i_control> &control_, const event &ev)
 {
     std::function<void(const event&)> callback;
@@ -1420,6 +1525,19 @@ void window::send_event_to_plains_and_control(const event& ev, const std::shared
     }
 }
 
+void window::selected_child_remove_focus()
+{
+    // if docked_control == control => skip
+    if (selected_child && is_physical_window()) // enabled_
+    {
+        selected_child->remove_focus();
+
+        selected_child->focused_ = false;
+        selected_child->redraw(selected_child->position());
+        selected_child.reset();
+    }
+
+}
 void window::send_mouse_event(const mouse_event &ev)
 {
     if (!enabled_ && !docked_control)
@@ -1431,7 +1549,6 @@ void window::send_mouse_event(const mouse_event &ev)
     {
         mouse_event me{ mouse_event_type::leave, ev.x, ev.y };
         send_event_to_control(active_control, { event_type::mouse, me });
-
         active_control.reset();
     }
 
@@ -1442,9 +1559,27 @@ void window::send_mouse_event(const mouse_event &ev)
     {
         if (active_control == send_to_control)
         {
-            if (send_to_control->focusing() && ev_.type == mouse_event_type::left_down)
+            if (send_to_control->focusing())
             {
-                set_focused(send_to_control);
+                if (ev_.type == mouse_event_type::left_down)
+                {
+                    set_focused(send_to_control);
+                }
+                else if (ev_.type == mouse_event_type::left_up
+                    && (focus_mode::always & get_focus_mode())
+                    && input_control
+                    && 0 == ((focus_mode::wnd | focus_mode::input_set) & send_to_control->get_focus_mode())
+                    && send_to_control->focused()
+                    )
+                {
+                    // window focus_mode::always: не дает keyboard для других ctrl
+                    event ev;
+                    ev.type = event_type::internal;
+                    ev.internal_event_ = internal_event{ internal_event_type::remove_focus };
+                    send_event_to_control(send_to_control, ev);
+
+                    set_input_focused();
+                }
             }
 
             return send_event_to_control(send_to_control, { event_type::mouse, ev_ });
@@ -1489,15 +1624,60 @@ void window::send_mouse_event(const mouse_event &ev)
                 return send_mouse_event_to_control(*it, ev);
             }
         }
-    }
-    else
-    {
-        for (auto &control : controls)
+
+        /// mouse position outside of any controls
+        if (mouse_event_type::left_up == ev.type)
         {
-            if (control->position().in(ev.x, ev.y) && control == docked_control)
+            auto focused = get_focused();
+
+            if (!input_control)
             {
-                return send_mouse_event_to_control(control, ev);
+                if (focused)
+                {
+                    event ev_;
+                    ev_.type = event_type::internal;
+                    ev_.internal_event_ = internal_event{ internal_event_type::remove_focus };
+                    send_event_to_control(focused, ev_);
+                    if ((0 == (focus_mode::react_set & get_focus_mode())))
+                    {
+                        set_next_focused();
+                    }
+                }
             }
+            else
+            {
+                if (!focused)
+                {
+                    set_input_focused();
+                    selected_child_remove_focus();
+                }
+                else
+                {
+                    if (0 == (focus_mode::fixed & focused->get_focus_mode()))
+                    {
+                        event ev_;
+                        ev_.type = event_type::internal;
+                        ev_.internal_event_ = internal_event{ internal_event_type::remove_focus };
+                        send_event_to_control(focused, ev_);
+
+                        if (focus_mode::always & get_focus_mode())
+                        {
+                            set_input_focused();
+                        }
+
+                        selected_child_remove_focus();
+                    }
+                }
+            }
+        }
+        return;
+    }
+
+    for (auto &control : controls)
+    {
+        if (control->position().in(ev.x, ev.y) && control == docked_control)
+        {
+            return send_mouse_event_to_control(control, ev);
         }
     }
 }
@@ -1516,49 +1696,33 @@ bool window::check_control_here(int32_t x, int32_t y)
     return false;
 }
 
+void window::remove_focus()
+{
+    for (const auto& control : controls)
+    {
+        if (control->focused()) //  && control != docked_control
+        {
+            event ev_;
+            ev_.type = event_type::internal;
+            ev_.internal_event_ = internal_event{ internal_event_type::remove_focus };
+            send_event_to_control(control, ev_);
+        }
+    }
+}
+
 void window::change_focus()
 {
-    if (controls.empty())
-    {
-        return;
-    }
-
     for (auto &control : controls)
     {
-        if (control->focused() && control != docked_control)
+        if (control->focused())// && control != docked_control)
         {
             event ev;
             ev.type = event_type::internal;
             ev.internal_event_ = internal_event{ internal_event_type::remove_focus };
             send_event_to_control(control, ev);
-
-            if (!control->focused()) /// need to change the focus inside the internal elements of the control
-            {
-                ++focused_index;
-            }
-            else
-            {
-                return;
-            }
             break;
         }
     }
-
-    size_t focusing_controls = 0;
-    for (const auto &control : controls)
-    {
-        if (control->focusing())
-        {
-            ++focusing_controls;
-        }
-    }
-
-    if (focused_index >= focusing_controls)
-    {
-        focused_index = 0;
-    }
-
-    set_focused(focused_index);
 }
 
 void window::execute_focused()
@@ -1590,69 +1754,237 @@ void window::execute_focused()
 
 void window::set_focused(std::shared_ptr<i_control> control)
 {
-    size_t index = 0;
+    if (!control || (focused_control == control && control->focused()))
+    {
+        return;
+    }
+
     for (auto &c : controls)
     {
-        if (c == control)
-        {
-            if (c->focused())
-            {
-                return;
-            }
-            focused_index = index;
-        }
-
-        if (c->focused())
+        if (c != control && c->focused() && control != docked_control)
         {
             event ev;
             ev.type = event_type::internal;
             ev.internal_event_ = internal_event{ internal_event_type::remove_focus };
             send_event_to_control(c, ev);
         }
-
-        if (c->focusing())
-        {
-            ++index;
-        }
     }
 
-    if (control)
+    focused_control = control;
+    if ((focus_mode::react_set & get_focus_mode())
+        && (focus_mode::fixed & control->get_focus_mode()))
     {
-        event ev;
-        ev.type = event_type::internal;
-        ev.internal_event_ = internal_event{ internal_event_type::set_focus };
-        send_event_to_control(control, ev);
+        input_control = control;
+    }
+
+    event ev;
+    ev.type = event_type::internal;
+    ev.internal_event_ = internal_event{ internal_event_type::set_focus };
+    send_event_to_control(control, ev);
+
+    if (enabled_ && selected_child && selected_child != control)
+    {
+        selected_child_remove_focus();
+    }
+
+    auto focused_wnd = std::dynamic_pointer_cast<window>(control);
+    if (focused_wnd && !focused_wnd->input_control)
+    {
+        focused_wnd->focused_ = true;
+        std::shared_ptr<i_control> cw;
+        if (focused_wnd->focused_control)
+        {
+            cw = focused_wnd->focused_control;
+        }
+        else
+        {
+            for (auto& c : focused_wnd->controls)
+            {
+                if (c->focusing())
+                {
+                    cw = c;
+                    break;
+                }
+            }
+        }
+
+        if (cw)
+        {
+            focused_wnd->set_focused(cw);
+            return;
+        }
     }
 }
 
-void window::set_focused(size_t focused_index_)
+std::shared_ptr<window> window::get_next_window()
 {
-    size_t index = 0;
-    for (auto &control : controls)
+    if (docked_control)
     {
-        if (control->focusing())
-        {
-            if (index == focused_index_)
-            {
-                event ev;
-                ev.type = event_type::internal;
-                ev.internal_event_ = internal_event{ internal_event_type::set_focus };
-                send_event_to_control(control, ev);
+        auto next = docked_control->get_next_window();
+        return next ? next : docked_control;
+    }
+    if (selected_child)
+    {
+        auto next = selected_child->get_next_window();
+        return next ? next : selected_child;
+    }
+    return nullptr;
+}
 
-                break;
+void window::set_next_focused(const bool next)
+{
+    if (docked_control && !docked_control->controls.empty())
+    {
+        docked_control->set_next_focused(next);
+        return;
+    }
+    if (selected_child && !selected_child->controls.empty())
+    {
+        if (selected_child->focused_control)
+        {
+            auto rend = selected_child->controls.rend();
+            auto rit = selected_child->controls.rbegin();
+            for (; rit != rend && !(*rit)->focusing(); ++rit)
+            {
             }
 
-            ++index;
+            if (rit != rend && *rit == selected_child->focused_control)
+            {
+                // last
+                auto parent__ = selected_child->parent_.lock();
+                if (parent__ && parent__->selected_child)
+                {
+                    selected_child->focused_control.reset();
+                    parent__->selected_child->focused_ = false;
+                    parent__->selected_child->redraw(parent__->selected_child->position());
+                    parent__->selected_child.reset(); // to parent next
+                }
+            }
+        }
+
+        if (selected_child)
+        {
+            selected_child->set_next_focused(next);
+            return;
+        }
+    }
+
+    if (controls.empty() || (1 == controls.size() && focused_control))
+    {
+        // assert(controls.empty() || focused_control == controls[0]);
+        return;
+    }
+
+    auto end = controls.end();
+    auto it = controls.begin();
+    if (!focused_control)
+    {
+        if (next)
+        {
+            return;
+        }
+        for (; it != end && !(*it)->focusing(); ++it)
+        {
+        }
+    }
+    else
+    {
+        for (; it != end; ++it)
+        {
+            if (*it == focused_control)
+            {
+                ++it; // next
+                break;
+            }
+        }
+
+        for (; it != end && !(*it)->focusing(); ++it)
+        {
+        }
+    }
+
+    if (it == end)
+    {
+        if (next)
+        {
+            return;
+        }
+
+        for (it = controls.begin();
+            it != end && (*it != focused_control) && !(*it)->focusing(); ++it)
+        {
+        }
+
+        if (it == end)
+        {
+            return;
+        }
+    }
+
+     set_focused(*it);
+}
+
+void window::set_input_focused()
+{
+    if (!input_control || !input_control->focusing() || input_control->focused())
+    {
+        return;
+    }
+
+    auto c = get_focused();
+    if (c)
+    {
+        event ev;
+        ev.type = event_type::internal;
+        ev.internal_event_ = internal_event{ internal_event_type::remove_focus };
+        send_event_to_control(c, ev);
+    }
+
+    event ev;
+    ev.type = event_type::internal;
+    ev.internal_event_ = internal_event{ internal_event_type::set_focus };
+    send_event_to_control(input_control, ev);
+
+    focused_control = input_control;
+
+    selected_child_remove_focus();
+}
+
+void window::setup_input_focused()
+{
+    if (0 == (focus_mode::react_set & get_focus_mode()))
+    {
+        input_control.reset();
+        return;
+    }
+
+    if (input_control)
+    {
+        return;
+    }
+
+    for (auto& control : controls)
+    {
+        if (focus_mode::fixed & control->get_focus_mode())
+        {
+            input_control = control;
+            break;
         }
     }
 }
 
 std::shared_ptr<i_control> window::get_focused()
 {
+    if (focused_control && focused_control->focused())
+    {
+        return focused_control;
+    }
+
     for (auto &control : controls)
     {
         if (control->focused())
         {
+            focused_control = control;
             return control;
         }
     }
@@ -1670,36 +2002,43 @@ void window::update_button_images()
     close_button->set_image(theme_image(ti_close, theme_));
 }
 
-static constexpr int32_t _btn_width = 42, _btn_height = 28;
-
 int32_t window::caption_height(const window_style create_style) const
 {
-    const int32_t btn_height = (window_style_ &
+    const window_style style = context_.physical() ? window_style_ : create_style;
+    const auto border_height = (style & window_style::border_top) ? theme_dimension(tcn, tv_border_width, theme_) : 0;
+    auto font_size = (!caption.empty() && (window_style_ & window_style::title_showed)
+        ? theme_font(tcn, tv_caption_font, theme_).size : 0);
+    return border_height + ((window_style_ &
            (window_style::close_button | window_style::expand_button
                   | window_style::minimize_button | window_style::pin_button
                        | window_style::switch_theme_button | window_style::switch_lang_button))
-        ? _btn_height : 0;
-    const window_style style = context_.physical() ? window_style_ : create_style;
-    return btn_height
-        + ((style & window_style::border_top) ?
-            theme_dimension(tcn, tv_border_width, theme_) : 0);
+        ? std::max(font_size, parent_.expired() ? _btn_height : _btn_height_child) : font_size);
 }
 
 void window::update_buttons()
 {
-    auto border_height = (window_style_ & window_style::border_top) ? theme_dimension(tcn, tv_border_width, theme_) : 0;
-    auto border_width = (window_style_ & window_style::border_right) ? theme_dimension(tcn, tv_border_width, theme_) : 0;
+    const auto border_height = (window_style_ & window_style::border_top) ? theme_dimension(tcn, tv_border_width, theme_) : 0;
+    const auto border_width = (window_style_ & window_style::border_right) ? theme_dimension(tcn, tv_border_width, theme_) : 0;
 
-    auto left = position_.width() - _btn_width - border_width;// -1;
+    auto btn_width = _btn_width;
+    auto btn_height = _btn_height;
     auto top = border_height;
+    if (!parent_.expired())
+    {
+        btn_width = _btn_width_child;
+        btn_height = _btn_height_child;
+        if(!docked_) // && transient_window)
+            top += _border_select_height;
+    }
+
+    auto left = position_.width() - btn_width - border_width;// -1;
 
     if (window_style_ & window_style::close_button)
     {
-        close_button->set_position({ left, top, left + _btn_width,// + border_width,
-            top + _btn_height });
+        close_button->set_position({ left, top, left + btn_width, top + btn_height });
         close_button->show();
 
-        left -= _btn_width;
+        left -= btn_width;
     }
     else
     {
@@ -1708,12 +2047,10 @@ void window::update_buttons()
 
     if (window_style_ & (window_style::expand_button | window_style::minimize_button))
     {
-        // TODO: сделать в темах .json grey image "window_xxxx_disable",
-        // если нет window_style::xxxx_button
-        expand_button->set_position({ left, top, left + _btn_width, top + _btn_height });
+        expand_button->set_position({ left, top, left + btn_width, top + btn_height });
         expand_button->show();
 
-        left -= _btn_width;
+        left -= btn_width;
 
         if (window_style_ & window_style::expand_button)
         {
@@ -1731,10 +2068,10 @@ void window::update_buttons()
 
     if (window_style_ & window_style::minimize_button)
     {
-        minimize_button->set_position({ left, top, left + _btn_width, top + _btn_height });
+        minimize_button->set_position({ left, top, left + btn_width, top + btn_height });
         minimize_button->show();
 
-        left -= _btn_width;
+        left -= btn_width;
     }
     else
     {
@@ -1743,10 +2080,10 @@ void window::update_buttons()
 
     if (window_style_ & window_style::pin_button)
     {
-        pin_button->set_position({ left, top, left + _btn_width, top + _btn_height });
+        pin_button->set_position({ left, top, left + btn_width, top + btn_height });
         pin_button->show();
 
-        left -= _btn_width;
+        left -= btn_width;
     }
     else
     {
@@ -1755,10 +2092,10 @@ void window::update_buttons()
 
     if (window_style_ & window_style::switch_theme_button)
     {
-        switch_theme_button->set_position({ left, top, left + _btn_width, top + _btn_height });
+        switch_theme_button->set_position({ left, top, left + btn_width, top + btn_height });
         switch_theme_button->show();
 
-        left -= _btn_width;
+        left -= btn_width;
     }
     else
     {
@@ -1767,10 +2104,10 @@ void window::update_buttons()
 
     if (window_style_ & window_style::switch_lang_button)
     {
-        switch_lang_button->set_position({ left, top, left + _btn_width, top + _btn_height });
+        switch_lang_button->set_position({ left, top, left + btn_width, top + btn_height });
         switch_lang_button->show();
 
-        left -= _btn_width;
+        left -= btn_width;
     }
     else
     {
@@ -1778,17 +2115,47 @@ void window::update_buttons()
     }
 }
 
-void window::draw_border(graphic &gr)
-{
-    const auto c = theme_color(tcn, tv_border, theme_);
 
+void window::draw_selected_border(graphic& gr, int32_t border_width)
+{
+    // assert(!parent_.expired());
+
+#ifndef _WIN32
+    // linux line width = 1 always [TODO: draw_line()]
+    border_width = border_width ? 1 : 0;
+#endif
+
+    const auto pos = position();
+
+    int32_t r = pos.right;
+    if (window_style_ & window_style::border_right)
+    {
+        r -= border_width;
+    }
+    int32_t t = pos.top;
+    if (window_style_ & window_style::border_top)
+    {
+        t += border_width;
+    }
+    int32_t l = pos.left;
+    if (window_style_ & window_style::border_left)
+    {
+        l += border_width;
+    }
+
+    gr.draw_rect({l, t, r, t + _border_select_height}, theme_color(tcn, tv_border_focus, theme_));
+}
+
+
+void window::draw_border(graphic &gr, const color c, int32_t border_width)
+{
 #ifdef _WIN32
-    const auto x = theme_dimension(tcn, tv_border_width, theme_);
-    const int32_t k = x < 2 ? 0 : x / 2;
+    const int32_t x = border_width;
+    const int32_t k = border_width < 2 ? 0 : border_width/2;
 #elif __linux__
-    // linux width = 1 always
+    // linux line width = 1 always [TODO: draw_line()]
+    const int32_t x = border_width ? 1 : 0;
     constexpr int32_t k = 0;
-    constexpr int32_t x = 1;
 #endif
 
     int32_t l = 0, t = 0, w = 0, h = 0;
@@ -1826,24 +2193,22 @@ void window::draw_border(graphic &gr)
     }
 }
 
-void window::draw_caption(graphic& gr, rect paint_rect)
+void window::draw_caption(graphic& gr, const rect &paint_rect, const int32_t border_width)
 {
-    if (!caption.empty() && (window_style_ & window_style::title_showed) && parent_.expired())
+    if (!caption.empty() && (window_style_ & window_style::title_showed)
+        && parent_.expired()) // is_physical_window()
     {
-        auto caption_font = theme_font(tcn, tv_caption_font, theme_);
+        auto caption_font = std::move(theme_font(tcn, tv_caption_font, theme_));
 
-        auto border_width = theme_dimension(tcn, tv_border_width, theme_);
+        auto caption_text_rect = measure_text(caption, caption_font, &gr);
+        const auto h = std::max(_btn_height, caption_font.size);
+        auto top = (h - caption_text_rect.height()) / 2;
+        caption_text_rect.move(border_width + 5, border_width + top);
 
-        auto caption_rect = measure_text(caption, caption_font, &gr);
-        caption_rect.move(border_width + 5, border_width + 5);
-
-        if (caption_rect.in(paint_rect))
+        if (caption_text_rect.in(paint_rect))
         {
-            gr.draw_rect(caption_rect, theme_color(tcn, tv_background, theme_));
-            gr.draw_text(caption_rect,
-                caption,
-                theme_color(tcn, tv_text, theme_),
-                caption_font);
+            gr.draw_rect(caption_text_rect, theme_color(tcn, tv_background, theme_));
+            gr.draw_text(caption_text_rect,caption, theme_color(tcn, tv_text, theme_), caption_font);
         }
     }
 }
@@ -1904,12 +2269,9 @@ bool window::init(std::string_view caption_, const rect& position__,
     auto next_theme = wui::get_default_theme()->get_name();
     switch_theme_button->set_caption(wui::locale("window", next_theme == "dark" ?
         wui::window::cl_light_theme : wui::window::cl_dark_theme));
-    //update_button_images();
-    //update_buttons();
 
 
     /// Try to make the new window transient
-
     auto transient_window_ = get_transient_window();
     if (transient_window_)
     {
@@ -1918,13 +2280,14 @@ bool window::init(std::string_view caption_, const rect& position__,
             transient_window_->normal();
         }
 
-        if (docked_ && transient_window_->position_ > position_)
+        if (docked_setup && transient_window_->position_ > position_)
         {
             const int32_t left = (transient_window_->position().width() - position_.width()) / 2;
             const int32_t top = (transient_window_->position().height() - position_.height()) / 2;
+            docked_ = docked_setup;
 
             transient_window_->add_control(shared_from_this(), { left, top, left + position_.width(), top + position_.height() });
-            transient_window_->start_docking(shared_from_this()); // set parent
+            transient_window_->start_docking(shared_from_this());
         }
         else
         {
@@ -1933,40 +2296,70 @@ bool window::init(std::string_view caption_, const rect& position__,
             {
                 tw = tw->parent().lock();
             }
-            const auto tw_pos = tw ? tw->position() : transient_window_->position();
 
-            int32_t left = 0, top = 0;
-
-            if (tw_pos.width() > 0 && tw_pos.height() > 0)
+            if (!tw)
             {
-                left = tw_pos.left + (tw_pos.width() - position_.width()) / 2;
-                top = tw_pos.top + (tw_pos.height() - position_.height()) / 2;
+                auto listener__ = framework::get_listener();
+                if (listener__)
+                {
+                    tw = listener__->get_first();
+                }
+            }
+
+            // The next successful test will move the modal dialog box into the parent window.
+            if (docked_setup && tw && tw->position_ > position_)
+            {
+                transient_window_ = tw;
+                transient_window = tw;
+                docked_ = docked_setup;
+                if (tw->window_state_ == window_state::minimized)
+                {
+                    tw->normal();
+                }
+                const int32_t left = (tw->position().width() - position_.width()) / 2;
+                const int32_t top = (tw->position().height() - position_.height()) / 2;
+                tw->add_control(shared_from_this(), { left, top, left + position_.width(), top + position_.height() });
+                tw->start_docking(shared_from_this());
             }
             else
             {
+                // make not child modal dialog
+                const auto tw_pos = tw ? tw->position() : transient_window_->position();
+
+                int32_t left = 0, top = 0;
+
+                if (tw_pos.width() > 0 && tw_pos.height() > 0)
+                {
+                    left = tw_pos.left + (tw_pos.width() - position_.width()) / 2;
+                    top = tw_pos.top + (tw_pos.height() - position_.height()) / 2;
+                }
+                else
+                {
 #ifdef _WIN32
-                RECT r{};
-                SystemParametersInfo(SPI_GETWORKAREA, 0, &r, 0);
-                const rect work_area = { r.left, r.top, r.right, r.bottom };
-                left = (work_area.width() - position_.width()) / 2;
-                top = (work_area.height() - position_.height()) / 2;
+                    RECT r{};
+                    SystemParametersInfo(SPI_GETWORKAREA, 0, &r, 0);
+                    const rect work_area = { r.left, r.top, r.right, r.bottom };
+                    left = (work_area.width() - position_.width()) / 2;
+                    top = (work_area.height() - position_.height()) / 2;
 #elif __linux__
-                rect work_area = get_window_size(context_);
-                if (work_area.is_null())
-                    work_area = { 0, 0, context_.screen->width_in_pixels, context_.screen->height_in_pixels };
-                left = (work_area.width() - position_.width()) / 2;
-                top = (work_area.height() - position_.height()) / 2;
+                    rect work_area = get_window_size(context_);
+                    if (work_area.is_null())
+                        work_area = { 0, 0, context_.screen->width_in_pixels, context_.screen->height_in_pixels };
+                    left = (work_area.width() - position_.width()) / 2;
+                    top = (work_area.height() - position_.height()) / 2;
 #endif
-            }
+                }
 
-            position_.put(left, top);
+                position_.put(left, top);
+                docked_ = false;
 
-            transient_window_->disable();
-            if (tw)
-            {
-                tw->enabled_ = false; // disable input
+                transient_window_->disable(); // disable input
+                if (tw)
+                {
+                    tw->enabled_ = false; // disable input
+                }
+                set_topmost(true);
             }
-            set_topmost(true);
         }
     }
 
@@ -1979,6 +2372,9 @@ bool window::init(std::string_view caption_, const rect& position__,
         reset_cursor();
 
         send_internal(internal_event_type::window_created, 0, 0);
+        // update_theme() необходима для вторичных окон после add_control()
+        // при смене темы для оптимизированных controls (list, button, etc)
+        update_theme();
 
         send_internal(internal_event_type::size_changed, position_.width(), position_.height());
 
@@ -2087,7 +2483,8 @@ bool window::init(std::string_view caption_, const rect& position__,
         XCB_EVENT_MASK_BUTTON_RELEASE | XCB_EVENT_MASK_POINTER_MOTION |
         XCB_EVENT_MASK_ENTER_WINDOW | XCB_EVENT_MASK_LEAVE_WINDOW |
         XCB_EVENT_MASK_KEY_PRESS | XCB_EVENT_MASK_KEY_RELEASE |
-        XCB_EVENT_MASK_STRUCTURE_NOTIFY /* | XCB_EVENT_MASK_PROPERTY_CHANGE*/
+        XCB_EVENT_MASK_STRUCTURE_NOTIFY
+        // | XCB_EVENT_MASK_PROPERTY_CHANGE | XCB_EVENT_MASK_FOCUS_CHANGE
     };
 
     auto window_cookie = xcb_create_window(context_.connection,
@@ -2108,6 +2505,8 @@ bool window::init(std::string_view caption_, const rect& position__,
     }
 
     remove_window_decorations(context_);
+
+    set_size_hints();
 
     xcb_atom_t styles[2] = { 0 };
     uint32_t styles_count = 0;
@@ -2162,6 +2561,9 @@ bool window::init(std::string_view caption_, const rect& position__,
         {
             root_window_ = true;
             graphic::set_text_measurer(&get_graphic());
+            // TODO: для совместимости с стилем кодирования, когда
+            // различные вызовы требуют инициализации окна, создают временное невидимое окно,
+            // для измерений текста так же возможно использовать внешние библиотеки
         }
     }
 
@@ -2173,6 +2575,8 @@ bool window::init(std::string_view caption_, const rect& position__,
         listener__->add_window(context_.wnd, shared_from_this());
     }
     send_internal(internal_event_type::window_created, 0, 0);
+    // update_theme();
+
     send_internal(internal_event_type::size_changed, position_.width(), position_.height());
 #endif
     return true;
@@ -2218,28 +2622,48 @@ bool window::_destroy()
     {
         mouse_event me{ mouse_event_type::leave };
         send_event_to_control(active_control, { event_type::mouse, me });
+        active_control.reset();
     }
-
-    active_control.reset();
+    input_control.reset();
+    focused_control.reset();
 
     controls.clear();
     subscribers_.clear(); // необходимо для не удаляемых окон типа диалог и тп.
 
+#if 1
+    auto transient_window_ = get_transient_window();
+    if (transient_window_)
+    {
+        auto child_ = transient_window_->selected_child;
+        if (child_ == shared_from_this())
+        {
+            child_->focused_ = false;
+            transient_window_->selected_child.reset();
+        }
+        transient_window_->end_docking();
+    }
+#endif
+
     auto parent__ = parent_.lock();
     if (parent__)
     {
-        parent__->remove_control(shared_from_this());
-
-        auto transient_window_ = get_transient_window();
-        if (transient_window_)
+        auto shared_this = shared_from_this();
+        auto child = parent__->selected_child;
+        if (child == shared_this)
         {
-            transient_window_->end_docking();
+            child->focused_ = false;
+            parent__->selected_child.reset();
         }
-
+        parent__->remove_control(shared_this);
         if (close_callback)
         {
             close_callback();
         }
+        return false;
+    }
+
+    if (!context_.physical())
+    {
         return false;
     }
 
@@ -2258,7 +2682,8 @@ bool window::_destroy()
 
 /// Windows specified code
 #ifdef _WIN32
-
+// TODO: модификаторы могут быть нажаты одновременно,
+// нужны бинарные флаги
 static uint8_t get_key_modifier()
 {
     if (GetKeyState(VK_SHIFT) < 0)
@@ -2468,11 +2893,18 @@ LRESULT CALLBACK window::wnd_proc(HWND hwnd, UINT message, WPARAM w_param, LPARA
                 {
                     wnd->root_window_ = true;
                     graphic::set_text_measurer(&wnd->get_graphic());
+                    // TODO: для совместимости с стилем кодирования, когда
+                    // различные вызовы требуют инициализации окна, создают временное невидимое окно,
+                    // для измерений текста так же возможно использовать внешние библиотеки
                 }
                 listener__->add_window(wnd->context_.hwnd, wnd->shared_from_this());
             }
 
             wnd->send_internal(internal_event_type::window_created, 0, 0);
+            // update_theme() необходима для вторичных окон после add_control()
+            // при смене темы для оптимизированных controls (list, etc).
+            // Пока нет физических дочерних окон - здесь не нужна.
+            //wnd->update_theme();
         }
         break;
 
@@ -2525,6 +2957,7 @@ LRESULT CALLBACK window::wnd_proc(HWND hwnd, UINT message, WPARAM w_param, LPARA
                 wnd->graphic_.clear(paint_rect);
             }
 
+            // TODO: remove duplicate code win32/linux
             std::vector<std::shared_ptr<i_control>> topmost_controls;
 
             for (auto &control : wnd->controls)
@@ -2547,9 +2980,11 @@ LRESULT CALLBACK window::wnd_proc(HWND hwnd, UINT message, WPARAM w_param, LPARA
                 control->draw(wnd->graphic_, paint_rect);
             }
 
-            wnd->draw_border(wnd->graphic_);
+            const auto border_width = theme_dimension(wnd->tcn, window::tv_border_width, wnd->theme_);
+            wnd->draw_caption(wnd->graphic_, paint_rect, border_width);
 
-            wnd->draw_caption(wnd->graphic_, paint_rect);
+            wnd->draw_border(wnd->graphic_,
+                theme_color(wnd->tcn, window::tv_border, wnd->theme_), border_width);
 
             wnd->graphic_.flush(paint_rect);
 
@@ -2575,31 +3010,31 @@ LRESULT CALLBACK window::wnd_proc(HWND hwnd, UINT message, WPARAM w_param, LPARA
                       && y_mouse > window_rect.bottom - window_rect.top - 5)
                     || (x_mouse < 5 && y_mouse < 5))
                 {
-                    set_cursor(wnd->context_, cursor::size_nwse);
+                    set_cursor(&wnd->context_, cursor::size_nwse);
                     cursor_size_view = true;
                 }
                 else if ((x_mouse > window_rect.right - window_rect.left - 5 && y_mouse < 5)
                     || (x_mouse < 5 && y_mouse > window_rect.bottom - window_rect.top - 5))
                 {
-                    set_cursor(wnd->context_, cursor::size_nesw);
+                    set_cursor(&wnd->context_, cursor::size_nesw);
                     cursor_size_view = true;
                 }
                 else if (x_mouse > window_rect.right - window_rect.left - 5
                     || x_mouse < 5)
                 {
-                    set_cursor(wnd->context_, cursor::size_we);
+                    set_cursor(&wnd->context_, cursor::size_we);
                     cursor_size_view = true;
                 }
                 else if (y_mouse > window_rect.bottom - window_rect.top - 5 || y_mouse < 5)
                 {
-                    set_cursor(wnd->context_, cursor::size_ns);
+                    set_cursor(&wnd->context_, cursor::size_ns);
                     cursor_size_view = true;
                 }
                 else if (cursor_size_view &&
                     x_mouse > 5 && x_mouse < window_rect.right - window_rect.left - 5 &&
                     y_mouse > 5 && y_mouse < window_rect.bottom - window_rect.top - 5)
                 {
-                    set_cursor(wnd->context_, cursor::default_);
+                    set_cursor(&wnd->context_, cursor::default_);
                     cursor_size_view = false;
                 }
             }
@@ -2904,9 +3339,46 @@ LRESULT CALLBACK window::wnd_proc(HWND hwnd, UINT message, WPARAM w_param, LPARA
             InvalidateRect(hwnd, &invalidatingRect, FALSE);
         }
         break;
-        case WM_ACTIVATEAPP:
-            reset_cursor();
-        break;
+#if 0
+        case WM_ACTIVATE: // WM_ACTIVATEAPP, w_param
+        {
+            // send deactivate_evt, activate_evt ?
+            window* wnd = reinterpret_cast<window*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
+            if (WA_INACTIVE != LOWORD(w_param))
+            {
+                if (!HIWORD(w_param))
+                {
+                    reset_cursor();
+                    //wnd->focused_ = true;
+                }
+            }
+            //else
+            //{
+            //    wnd->focused_ = false;
+            //}
+            //wnd->redraw({ 0, 0, wnd->position_.width(), wnd->caption_height(wnd->window_style_) }, true);
+        }
+        return DefWindowProc(hwnd, message, w_param, l_param);
+        case WM_SETFOCUS:
+        {
+            window* wnd = reinterpret_cast<window*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
+            wnd->focused_ = true;
+            //wnd->redraw({ 0, 0, wnd->position_.width(), wnd->caption_height(wnd->window_style_) }, true);
+            if (focus_mode::always & wnd->get_focus_mode())
+            {
+                wnd->set_input_focused();
+            }
+        }
+        return DefWindowProc(hwnd, message, w_param, l_param);
+        case WM_KILLFOCUS:
+        {
+            window* wnd = reinterpret_cast<window*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
+            //wnd->remove_focus();
+            wnd->focused_ = false;
+            //wnd->redraw({ 0, 0, wnd->position_.width(), wnd->caption_height(wnd->window_style_) }, true);
+        }
+        return DefWindowProc(hwnd, message, w_param, l_param);
+#endif
         case WM_MOVE:
         {
             window* wnd = reinterpret_cast<window*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
@@ -2936,22 +3408,37 @@ LRESULT CALLBACK window::wnd_proc(HWND hwnd, UINT message, WPARAM w_param, LPARA
 
             if (w_param == VK_TAB)
             {
-                wnd->change_focus(); return 0;
+                wnd->set_next_focused();
+                return 0;
             }
-            else if (w_param == VK_RETURN &&
-                     GetKeyState(VK_SHIFT) >= 0 &&
-                     GetKeyState(VK_LCONTROL) >= 0 &&
-                     GetKeyState(VK_RCONTROL) >= 0)
+            else if (w_param == VK_RETURN
+                     && GetKeyState(VK_SHIFT) >= 0
+                     && GetKeyState(VK_LCONTROL) >= 0
+                     && GetKeyState(VK_RCONTROL) >= 0)
             {
-                auto focused = wnd->get_focused();
-                auto input_ctrl = std::dynamic_pointer_cast<input>(focused);
-                if (input_ctrl && input_ctrl->get_input_view() == input_view::multiline)
-                {
-                    // Отправляем событие в input для создания новой строки
-                }
-                else
+                auto wnd_next = wnd->get_next_window();
+                auto focused = (wnd_next ? wnd_next->get_focused() : wnd->get_focused());
+                auto focused_wnd = std::dynamic_pointer_cast<window>(focused);
+                if (!focused_wnd && (!focused
+                    || 0 == (focus_mode::input_set & focused->get_focus_mode())))
                 {
                     wnd->execute_focused();
+                    return 0;
+                }
+                auto wnd_ = focused_wnd ? focused_wnd : wnd->shared_from_this();
+                if (wnd_ && (focus_mode::always & wnd_->get_focus_mode()))
+                {
+                    wnd_->set_input_focused();
+                    return 0;
+                }
+
+                if(!wnd_next)
+                    wnd_next = wnd->shared_from_this();
+                if (0 == (focus_mode::always & wnd_next->get_focus_mode())
+                    && wnd_next->focused_control
+                    && (focus_mode::free & wnd_next->focused_control->get_focus_mode()))
+                {
+                    wnd_next->set_next_focused(true);
                     return 0;
                 }
             }
@@ -3124,24 +3611,7 @@ void window::process_events(xcb_generic_event_t &e)
                 graphic_.clear(paint_rect);
             }
 
-            if (!caption.empty() && (window_style_ & window_style::title_showed)
-                && is_physical_window())
-            {
-                auto caption_font = theme_font(tcn, tv_caption_font, theme_);
-
-                auto caption_rect = measure_text(caption, caption_font, &graphic_);
-                caption_rect.move(10, 5);
-
-                if (caption_rect.in(paint_rect))
-                {
-                    graphic_.draw_rect(caption_rect, theme_color(tcn, tv_background, theme_));
-                    graphic_.draw_text(caption_rect, caption,
-                        theme_color(tcn, tv_text, theme_), caption_font);
-                }
-            }
-
-            draw_border(graphic_);
-
+            // TODO: remove duplicate code win32/linux
             std::vector<std::shared_ptr<i_control>> topmost_controls;
 
             for (auto &control : controls)
@@ -3164,6 +3634,10 @@ void window::process_events(xcb_generic_event_t &e)
                 control->draw(graphic_, paint_rect);
             }
 
+            const auto border_width = theme_dimension(tcn, window::tv_border_width, theme_);
+            draw_caption(graphic_, paint_rect, border_width);
+            draw_border(graphic_, theme_color(tcn, window::tv_border, theme_), border_width);
+
             graphic_.flush(paint_rect);
         }
         break;
@@ -3182,40 +3656,40 @@ void window::process_events(xcb_generic_event_t &e)
             {
                 if (x_mouse > ws.width() - 5 && y_mouse > ws.height() - 5)
                 {
-                    set_cursor(context_, cursor::size_bottom_right);
+                    set_cursor(&context_, cursor::size_bottom_right);
                     cursor_size_view = true;
                 } else if (x_mouse < 5 && y_mouse < 5)
                 {
-                    set_cursor(context_, cursor::size_top_left);
+                    set_cursor(&context_, cursor::size_top_left);
                     cursor_size_view = true;
                 }
                 else if (x_mouse > ws.width() - 5 && y_mouse < 5)
                 {
-                    set_cursor(context_, cursor::size_top_right);
+                    set_cursor(&context_, cursor::size_top_right);
                     cursor_size_view = true;
                 }
                 else if (x_mouse < 5 && y_mouse > ws.height() - 5)
                 {
-                    set_cursor(context_, cursor::size_bottom_left);
+                    set_cursor(&context_, cursor::size_bottom_left);
                     cursor_size_view = true;
                 }
                 else if (x_mouse < 5 || x_mouse > ws.width() - 5)
                 {
                     // left | right
-                    set_cursor(context_, cursor::size_we);
+                    set_cursor(&context_, cursor::size_we);
                     cursor_size_view = true;
                 }
                 else if (y_mouse < 5 || y_mouse > ws.height() - 5)
                 {
                     // top | bottom
-                    set_cursor(context_, cursor::size_ns);
+                    set_cursor(&context_, cursor::size_ns);
                     cursor_size_view = true;
                 }
                 else if (cursor_size_view
                       && x_mouse > 5 && x_mouse < ws.width() - 5
                       && y_mouse > 5 && y_mouse < ws.height() - 5)
                 {
-                    set_cursor(context_, cursor::default_);
+                    set_cursor(&context_, cursor::default_);
                     cursor_size_view = false;
                 }
             }
@@ -3400,21 +3874,37 @@ void window::process_events(xcb_generic_event_t &e)
             {
                 if (ev_.detail == vk_tab)
                 {
-                    change_focus(); return;
+                    set_next_focused();
+                    return;
                 }
                 else if ((ev_.detail == vk_return || ev_.detail == vk_rreturn) &&
                     key_modifier != vk_lshift && key_modifier != vk_rshift &&
                     key_modifier != vk_lcontrol && key_modifier != vk_rcontrol)
                 {
-                    auto focused = get_focused();
-                    auto input_ctrl = std::dynamic_pointer_cast<input>(focused);
-                    if (input_ctrl && input_ctrl->get_input_view() == input_view::multiline)
+                    auto wnd_next = get_next_window();
+                    auto focused = (wnd_next ? wnd_next->get_focused() : get_focused());
+                    auto focused_wnd = std::dynamic_pointer_cast<window>(focused);
+                    if (!focused_wnd && (!focused
+                        || 0 == (focus_mode::input_set & focused->get_focus_mode())))
                     {
-                        // Отправляем событие в input для создания новой строки
+                        execute_focused();
+                        return;
                     }
-                    else
+                    auto wnd_ = focused_wnd ? focused_wnd : shared_from_this();
+                    if (wnd_ && (focus_mode::always & wnd_->get_focus_mode()))
                     {
-                        execute_focused(); return;
+                        set_input_focused();
+                        return;
+                    }
+
+                    if (!wnd_next)
+                        wnd_next = shared_from_this();
+                    if (0 == (focus_mode::always & wnd_next->get_focus_mode())
+                        && wnd_next->focused_control
+                        && (focus_mode::free & wnd_next->focused_control->get_focus_mode()))
+                    {
+                        wnd_next->set_next_focused(true);
+                        return;
                     }
                 }
 
@@ -3580,6 +4070,7 @@ void window::process_events(xcb_generic_event_t &e)
 
             if (ev.atom == net_wm_state)
             {
+
                 auto get_prop_cookie = xcb_get_property (context_.connection,
                     0,
                     context_.wnd,
@@ -3593,8 +4084,10 @@ void window::process_events(xcb_generic_event_t &e)
                 if (property_reply && property_reply->type == XCB_ATOM_ATOM
                     && xcb_get_property_value_length(property_reply) > 0)
                 {
+                    // не работает
                     auto val = (xcb_atom_t*)xcb_get_property_value(property_reply);
 
+                    // XCB_EVENT_MASK_FOCUS_CHANGE
                     if (*val == net_wm_state_focused && window_state_ == window_state::minimized)
                     {
                         window_state_ = prev_window_state_;
@@ -3717,7 +4210,7 @@ void window::init_atoms()
 
     auto net_wm_state_hidden = xcb_intern_atom_reply(context_.connection,
         xcb_intern_atom(context_.connection, 0, 20, "_NET_WM_STATE_HIDDEN"), nullptr);
-    if (net_wm_state_hidden)
+    if(net_wm_state_hidden)
     {
         wm_state_hidden = net_wm_state_hidden->atom;
         free(net_wm_state_hidden);
@@ -3774,6 +4267,21 @@ void window::init_atoms()
     free(net_wm_moveresize_reply);
 }
 
+void window::set_size_hints()
+{
+    if (min_width <= 0 || min_height <= 0)
+        return;
+    if (min_width > context_.screen->width_in_pixels)
+        min_width = context_.screen->width_in_pixels;
+    if (min_height > context_.screen->height_in_pixels)
+        min_height = context_.screen->height_in_pixels;
+
+    xcb_size_hints_t hints{};
+
+    xcb_icccm_size_hints_set_min_size(&hints, min_width, min_height);
+    xcb_icccm_set_wm_size_hints(context_.connection, context_.wnd, XCB_ATOM_WM_NORMAL_HINTS, &hints);
+}
+
 void window::send_destroy_event()
 {
     auto listener__ = framework::get_listener();
@@ -3794,8 +4302,7 @@ void window::send_destroy_event()
     xcb_flush(context_.connection);
 }
 
-void window::change_style(xcb_atom_t type, xcb_atom_t action,
-    xcb_atom_t style1, xcb_atom_t style2) noexcept
+void window::change_style(xcb_atom_t type, xcb_atom_t action, xcb_atom_t style1, xcb_atom_t style2) noexcept
 {
     if (!context_.connection || !context_.wnd)
     {

@@ -21,7 +21,8 @@ namespace framework
 {
 extern std::shared_ptr<listener> get_listener();
 
-framework_lin_impl::framework_lin_impl() : started_(false)
+framework_lin_impl::framework_lin_impl()
+    : started_(false)
 {
 }
 

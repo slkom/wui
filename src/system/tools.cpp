@@ -19,7 +19,6 @@
 #ifdef _WIN32
 
 #include <windows.h>
-#include <tchar.h>
 
 #elif __linux__
 
@@ -31,23 +30,18 @@
 
 #endif
 
+
 namespace wui
 {
 
-    static cursor _cursor{ cursor::no_ }; // предотвращаем затратные операции
-
-    // понадобится при смене фокуса
-    void reset_cursor()
-    {
-        _cursor = cursor::no_;
-    }
-
 #ifdef _WIN32
 
-void set_cursor(system_context &, const cursor cursor_)
+void set_cursor(system_context *context [[maybe_unused]], const cursor cursor_)
 {
-    if (cursor_ == _cursor)
-        return;
+    if (cursor_ == detail::cursor_state::_cursor)
+    {
+        return;  // prevention of costly operations
+    }
 
     LPCTSTR lcursorName = nullptr;
     switch (cursor_)
@@ -79,18 +73,15 @@ void set_cursor(system_context &, const cursor cursor_)
     }
     if (lcursorName)
     {
-        _cursor = cursor_;
+        detail::cursor_state::_cursor = cursor_;
         SetCursor(LoadCursor(NULL, lcursorName));
     }
 }
 
 #elif __linux__
 
-void set_cursor(system_context &context, const cursor cursor_)
+void detail::set_cursor(system_context* context_, const cursor cursor_)
 {
-    if (cursor_ == _cursor)
-        return;
-
     const char* cursor_id;
 
     switch (cursor_)
@@ -128,6 +119,7 @@ void set_cursor(system_context &context, const cursor cursor_)
     }
 
     xcb_cursor_context_t *ctx;
+    const system_context& context = *context_;
     auto screen = xcb_setup_roots_iterator(xcb_get_setup(context.connection)).data;
     if (xcb_cursor_context_new(context.connection, screen, &ctx) >= 0)
     {
@@ -135,7 +127,7 @@ void set_cursor(system_context &context, const cursor cursor_)
         if (cursor != XCB_CURSOR_NONE)
         {
             xcb_change_window_attributes(context.connection, context.wnd, XCB_CW_CURSOR, &cursor);
-            _cursor = cursor_;
+            cursor_state::_cursor = cursor_;
         }
         else
         {
@@ -144,7 +136,7 @@ void set_cursor(system_context &context, const cursor cursor_)
             if (cursor != XCB_CURSOR_NONE)
             {
                 xcb_change_window_attributes(context.connection, context.wnd, XCB_CW_CURSOR, &cursor);
-                _cursor = cursor::default_;
+                cursor_state::_cursor = cursor::default_;
             }
         }
         xcb_cursor_context_free(ctx);
@@ -201,7 +193,7 @@ rect get_popup_position(std::weak_ptr<window> parent, const rect& base_position,
     }
 
     auto parent_pos = parent_->position();
-    if (parent_->parent().expired()) 
+    if (parent_->parent().expired())
     {
         parent_pos = { 0, 0, parent_pos.width(), parent_pos.height() };
     }
@@ -233,7 +225,7 @@ rect get_popup_position(std::weak_ptr<window> parent, const rect& base_position,
             {
                 out_pos.put(parent_pos.right - out_pos.width(), base_position.top - out_pos.height() - indent);
             }
-            //TODO: full test
+
             const auto ch = parent_->caption_height();
             if (out_pos.top < parent_pos.top + ch)
             {
@@ -274,7 +266,7 @@ rect get_popup_position(std::weak_ptr<window> parent, const rect& base_position,
             out_pos.top = parent_pos.top;
             out_pos.bottom = parent_pos.bottom;
         }
-        //TODO: full test
+
         const auto ch = parent_->caption_height();
         if (out_pos.top < parent_pos.top + ch)
         {

@@ -114,7 +114,7 @@ void load_image_from_data(const std::vector<uint8_t> &data_, cairo_surface_t **i
             return CAIRO_STATUS_READ_ERROR;
         }
 
-        memcpy(data, reader_data.data, length);
+        std::memcpy(data, reader_data.data, length);
         reader_data.data += length;
         reader_data.size_left -= length;
 
@@ -162,18 +162,19 @@ namespace wui
 image::image(int32_t resource_index_, std::shared_ptr<i_theme> theme__)
     : theme_(theme__),
     position_{ 0 },
-    showed_(true), topmost_(false),
+    showed_(true), enabled_(true), topmost_(false),
     resource_index(resource_index_),
     img(nullptr)
 {
     load_image_from_resource(static_cast<WORD>(resource_index), boost::nowide::widen(theme_string(tc, tv_resource, theme_)), &img);
+    init_color_state();
 }
 #endif
 
 image::image(std::string_view file_name_, std::shared_ptr<i_theme> theme__)
     : theme_(theme__),
     position_{ 0 },
-    showed_(true), topmost_(false),
+    showed_(true), enabled_(true), topmost_(false),
     file_name(file_name_),
 #ifdef _WIN32
     resource_index(0),
@@ -181,18 +182,25 @@ image::image(std::string_view file_name_, std::shared_ptr<i_theme> theme__)
     img(nullptr)
 {
     load_image_from_file(file_name_, theme_string(tc, tv_path, theme_), &img, err);
+
+#ifdef _WIN32
+    init_color_state();
+#endif
 }
 
 image::image(const std::vector<uint8_t> &data)
     :
     position_{ 0 },
-    showed_(true), topmost_(false),
+    showed_(true), enabled_(true), topmost_(false),
 #ifdef _WIN32
     resource_index(0),
 #endif
     img(nullptr)
 {
     load_image_from_data(data, &img);
+#ifdef _WIN32
+    init_color_state();
+#endif
 }
 
 image::~image()
@@ -206,11 +214,24 @@ image::~image()
     }
 }
 
+#ifdef _WIN32
+void image::init_color_state()
+{
+    Gdiplus::ColorMatrix colorMatrix = {
+        0.30f, 0.30f, 0.30f, 0.00f, 0.00f,
+        0.59f, 0.59f, 0.59f, 0.00f, 0.00f,
+        0.11f, 0.11f, 0.11f, 0.00f, 0.00f,
+        0.00f, 0.00f, 0.00f, 0.40f, 0.00f, // 0.4 ok, 1.0 - gray
+        0.00f, 0.00f, 0.00f, 0.00f, 1.00f
+    };
+
+    attributes_gray.SetColorMatrix(&colorMatrix);
+}
+#endif
+
 void image::draw(graphic &gr_, const rect&)
 {
-    const auto control_pos = position();
-
-    if (!showed_ || control_pos.is_null())
+    if (!showed_ || position_.is_hide())
     {
         return;
     }
@@ -220,17 +241,18 @@ void image::draw(graphic &gr_, const rect&)
     {
         Gdiplus::Graphics gr(gr_.drawable());
 
+        const auto control_pos = position();
         gr.DrawImage(
             img,
             Gdiplus::Rect(control_pos.left, control_pos.top, control_pos.width(), control_pos.height()),
             0, 0, img->GetWidth(), img->GetHeight(),
             Gdiplus::UnitPixel,
-            nullptr);
+            enabled_ ? nullptr : &attributes_gray);
     }
 #elif __linux__
     if (img)
     {
-        gr_.draw_surface(*img, control_pos);
+        gr_.draw_surface(*img, position(), !enabled_);
     }
 #endif
 }
@@ -243,6 +265,11 @@ void image::set_position(const rect& position__)
 rect image::position() const
 {
     return get_control_position(position_, parent_);
+}
+
+void image::move(const int32_t dx, const int32_t dy)
+{
+    position_.move(dx, dy);
 }
 
 void image::set_parent(std::shared_ptr<window> window)
@@ -333,31 +360,35 @@ bool image::showed() const
 
 void image::enable()
 {
+    enabled_ = true;
+    //redraw();
 }
 
 void image::disable()
 {
+    enabled_ = false;
+    //redraw();
 }
 
 bool image::enabled() const
 {
-    return true;
+    return enabled_;
 }
 
 #ifdef _WIN32
 void image::change_image(const int32_t resource_index_)
 {
-    auto name__ = theme_string(tc, tv_resource, theme_);
-    if (img && resource_index_ == resource_index && name__ == path_)
+    const std::string& path__ = theme_string(tc, tv_resource, theme_);
+    if (img && resource_index_ == resource_index && path__ == path_)
     {
         redraw();
         return;
     }
     resource_index = resource_index_;
-    path_ = name__;
+    path_ = path__;
 
     free_image(&img);
-    load_image_from_resource(static_cast<WORD>(resource_index), boost::nowide::widen(name__), &img);
+    load_image_from_resource(static_cast<WORD>(resource_index), boost::nowide::widen(path__), &img);
 
     redraw();
 }
@@ -365,7 +396,7 @@ void image::change_image(const int32_t resource_index_)
 
 void image::change_image(std::string_view file_name_)
 {
-    auto path__ = theme_string(tc, tv_path, theme_);
+    const std::string& path__ = theme_string(tc, tv_path, theme_);
     if (img && file_name == file_name_ && path__ == path_)
     {
         redraw();
@@ -381,15 +412,15 @@ void image::change_image(std::string_view file_name_)
     redraw();
 }
 
-void image::change_image_raw(std::string_view data_name_,
-    std::shared_ptr<i_theme> theme__)
+void image::change_image_raw(std::string_view data_name_, std::shared_ptr<i_theme> theme__)
 {
     if (!theme__)
     {
         theme__ = get_default_theme();
     }
+
     if (img && data_name_ == data_name
-        && (!theme__ || theme__->get_name() == theme_name))
+        && (!theme__  || theme__->get_name() == theme_name))
     {
         redraw();
         return;

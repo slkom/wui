@@ -28,8 +28,6 @@ slider::slider(int32_t from_, int32_t to_, int32_t value_, std::function<void(in
     tcn(theme_control_name),
     theme_(theme__),
     position_{ 0 },
-    parent_(),
-    my_control_sid(), my_plain_sid(),
     showed_(true), enabled_(true), topmost_(false), active(false), focused_(false),
     slider_scrolling(false), mouse_on_control(false),
     slider_position({ 0 }),
@@ -361,6 +359,12 @@ void slider::set_position(const rect& position__)
 rect slider::position() const
 {
     return get_control_position(position_, parent_);
+}
+
+void slider::move(const int32_t dx, const int32_t dy)
+{
+    position_.move(dx, dy);
+    set_position(position_);
 }
 
 void slider::set_parent(std::shared_ptr<window> window_)

@@ -36,11 +36,10 @@ button::button(std::string_view caption_, std::function<void(void)> click_callba
     click_callback(click_callback_),
     tcn(theme_control_name_),
     theme_(theme__),
-    showed_(true), enabled_(true), topmost_(false), active(false), focused_(false),
+    showed_(true), enabled_(true), topmost_(false), active_(false), focused_(false),
     focusing_(theme_dimension(tcn, tv_focusing, theme_) != 0),
     pushed(false),
-    turned_(false),
-    text_rect_{}
+    turned_(false)
 {
 }
 
@@ -70,11 +69,10 @@ button::button(std::string_view caption_, std::function<void(void)> click_callba
     click_callback(click_callback_),
     tcn(theme_control_name_),
     theme_(theme__),
-    showed_(true), enabled_(true), topmost_(false), active(false), focused_(false),
+    showed_(true), enabled_(true), topmost_(false), active_(false), focused_(false),
     focusing_(theme_dimension(tcn, tv_focusing, theme_) != 0),
     pushed(false),
-    turned_(false),
-    text_rect_{}
+    turned_(false)
 {
     if (image_ && !image_->get_error().is_ok())
     {
@@ -93,11 +91,10 @@ button::button(std::string_view caption_, std::function<void(void)> click_callba
     click_callback(click_callback_),
     tcn(theme_control_name_),
     theme_(theme__),
-    showed_(true), enabled_(true), topmost_(false), active(false), focused_(false),
+    showed_(true), enabled_(true), topmost_(false), active_(false), focused_(false),
     focusing_(theme_dimension(tcn, tv_focusing, theme_) != 0),
     pushed(false),
-    turned_(false),
-    text_rect_{}
+    turned_(false)
 {
     if (image_ && !image_->get_error().is_ok())
     {
@@ -116,11 +113,10 @@ button::button(std::string_view caption_, std::function<void(void)> click_callba
     click_callback(click_callback_),
     tcn(theme_control_name_),
     theme_(theme__),
-    showed_(true), enabled_(true), topmost_(false), active(false), focused_(false),
+    showed_(true), enabled_(true), topmost_(false), active_(false), focused_(false),
     focusing_(theme_dimension(tcn, tv_focusing, theme_) != 0),
     pushed(false),
-    turned_(false),
-    text_rect_{}
+    turned_(false)
 {
     if (image_ && !image_->get_error().is_ok())
     {
@@ -138,11 +134,10 @@ button::button(std::string_view caption_, std::function<void(void)> click_callba
     click_callback(click_callback_),
     tcn(theme_control_name_),
     theme_(theme__),
-    showed_(true), enabled_(true), topmost_(false), active(false), focused_(false),
+    showed_(true), enabled_(true), topmost_(false), active_(false), focused_(false),
     focusing_(theme_dimension(tcn, tv_focusing, theme_) != 0),
     pushed(false),
-    turned_(false),
-    text_rect_{}
+    turned_(false)
 {
     if (image_ && !image_->get_error().is_ok())
     {
@@ -168,8 +163,8 @@ rect button::get_preferred_size()
 {
     // дает одинаковый height для нескольких кнопок
     const int32_t font_size = theme_font(tcn, tv_font, theme_).size;
-    rect text_rect{ }; // NB: text_rec_ не устанавливаем
-    if (button_view_ != button_view::image && !caption_org.empty())
+    rect text_rect{}; // NB: text_rec_ не устанавливаем
+    if (!caption_org.empty())
     {
         auto font_ = std::move(theme_font(tcn, tv_font, theme_));
         auto parent__ = parent_.lock();
@@ -183,16 +178,17 @@ rect button::get_preferred_size()
         case button_view::text:
             pref_rect.right = text_rect.right + _text_width_space;
             pref_rect.bottom = font_size + _text_height_space;
-        break;
+            break;
         case button_view::anchor:
             pref_rect.right = text_rect.right + _ident_left + _text_width_space;
             pref_rect.bottom = font_size + _text_height_space;
-        break;
+            break;
         case button_view::sheet:
             pref_rect.right = text_rect.right + _text_width_space;
             pref_rect.bottom = font_size + 2 * _sheet_bottom_space;
             break;
         case button_view::image:
+        case button_view::image_menu:
             if (image_)
             {
                 pref_rect.right = image_size;
@@ -203,7 +199,7 @@ rect button::get_preferred_size()
                 pref_rect.right = 32;
                 pref_rect.bottom = 32;
             }
-        break;
+            break;
         case button_view::image_right_text:
         {
             const auto image_size__ = image_ ? image_size : 0;
@@ -236,16 +232,17 @@ rect button::get_preferred_size()
     return pref_rect;
 }
 
-void button::draw(graphic& gr, const rect&)
+void button::draw(graphic &gr, const rect&)
 {
-    if (!showed_ || position_.is_null())
+    if (!showed_ || position_.is_hide())
     {
         return;
     }
 
     auto font_ = std::move(theme_font(tcn, tv_font, theme_));
 
-    if (button_view_ != button_view::image && !caption_org.empty() && 0 == text_rect_.width())
+    if (!caption_org.empty() && 0 == text_rect_.width()
+        && button_view_ != button_view::image && button_view_ != button_view::image_menu)
     {
         text_rect_ = measure_text(caption_org, font_, &gr);
     }
@@ -302,6 +299,7 @@ void button::draw(graphic& gr, const rect&)
         }
         break;
         case button_view::image:
+        case button_view::image_menu:
             if (image_)
             {
                 const auto val = 2 * border_width;
@@ -392,15 +390,46 @@ void button::draw(graphic& gr, const rect&)
             return;
     }
 
-    if (button_view_ != button_view::anchor && button_view_ != button_view::switcher
-        && button_view_ != button_view::radio && button_view_ != button_view::sheet)
+    const bool draw_rect_ = (button_view_ != button_view::anchor && button_view_ != button_view::switcher
+        && button_view_ != button_view::radio && button_view_ != button_view::sheet);
+    const auto round = theme_dimension(tcn, tv_round, theme_);
+    if (draw_rect_)
     {
-        auto border_color = focused_ ? theme_color(tcn, tv_focused_border, theme_)
-            : (!active ? theme_color(tcn, tv_border, theme_) : theme_color(tcn, tv_hover_border, theme_));
+        //auto border_color = focused_
+        //    ? theme_color(tcn, tv_focused_border, theme_)
+        //    : (!active_ ? theme_color(tcn, tv_border, theme_) : theme_color(tcn, tv_hover_border, theme_));
 
-        auto fill_color = enabled_ ? (active || turned_ ? theme_color(tcn, tv_active, theme_) : theme_color(tcn, tv_calm, theme_)) : theme_color(tcn, tv_disabled, theme_);
+        color border_color, fill_color;
+        if (enabled_)
+        {
+            if (active_)
+            {
+                border_color = theme_color(tcn, tv_hover_border, theme_);
+            }
+            else
+            {
+                if (focused_ || button_view_ != button_view::image_menu)
+                {
+                    border_color = theme_color(tcn, tv_focused_border, theme_);
+                }
+                else
+                {
+                    border_color = button_view_ != button_view::image_menu ? theme_color(tcn, tv_border, theme_) :
+                        theme_color(window::tc, window::tv_background, theme_);
+                }
+            }
 
-        gr.draw_rect(control_pos, border_color, fill_color, border_width, theme_dimension(tcn, tv_round, theme_));
+            fill_color = (active_ || turned_ ? theme_color(tcn, tv_active, theme_) :
+                theme_color(tcn, tv_calm, theme_));
+        }
+        else
+        {
+            fill_color = theme_color(tcn, tv_disabled, theme_);
+            border_color = button_view_ != button_view::image_menu ? fill_color :
+                theme_color(window::tc, window::tv_background, theme_);
+        }
+
+        gr.draw_rect(control_pos, border_color, fill_color, border_width, round);
     }
     else
     {
@@ -408,22 +437,23 @@ void button::draw(graphic& gr, const rect&)
         const auto background = theme_color(window::tc, window::tv_background, theme_);
         const auto border_color = focused_ && button_view_ != button_view::sheet ?
             theme_color(tcn, tv_disabled, theme_) : make_color(0, 0, 0, 0);
-        gr.draw_rect(control_pos, border_color, background, border_width, theme_dimension(tcn, tv_round, theme_));
+        gr.draw_rect(control_pos, border_color, background, border_width, round);
     }
 
     if (image_ && button_view_ != button_view::text && button_view_ != button_view::anchor)
     {
         image_->set_position( { image_left,
             image_top,
-            image_left + (button_view_ != button_view::switcher && button_view_ != button_view::radio ? image_size : image_->width()),
-            image_top + (button_view_ != button_view::switcher  && button_view_ != button_view::radio ? image_size : image_->height()) });
+            image_left + (button_view_ != button_view::switcher
+                && button_view_ != button_view::radio ? image_size : image_->width()),
+            image_top + (button_view_ != button_view::switcher
+                && button_view_ != button_view::radio ? image_size : image_->height()) });
         image_->draw(gr, { 0 });
     }
 
-    if (button_view_ != button_view::image
-        && !caption.empty())
+    if (!caption.empty() && button_view_ != button_view::image && button_view_ != button_view::image_menu)
     {
-        auto color_ = theme_color(tcn, tv_text, theme_);
+        auto color_ = make_color(0, 0, 0, 0);
 
         if (button_view_ == button_view::anchor)
         {
@@ -431,23 +461,29 @@ void button::draw(graphic& gr, const rect&)
             font_.decorations_ = decorations::underline;
         }
 
-        if (!enabled_ && (button_view_ == button_view::anchor
-            || button_view_ == button_view::sheet))
+        if (!enabled_
+            && (button_view::anchor == button_view_
+                || button_view::sheet == button_view_
+                || button_view::radio == button_view_
+                || button_view::switcher == button_view_
+                ))
         {
             color_ = theme_color(tcn, tv_disabled, theme_);
+        }
+
+        if (make_color(0, 0, 0, 0) == color_)
+        {
+            color_ = theme_color(tcn, tv_text, theme_);
         }
 
         gr.draw_text({ text_left, text_top }, caption, color_, font_);
     }
 
-    if (button_view_ == button_view::sheet)
+    if (button_view_ == button_view::sheet && (turned_  || focused_) && enabled_)
     {
-        gr.draw_rect({ control_pos.left, control_pos.bottom - _sheet_bottom_space,
-            control_pos.left + text_rect_.width(), control_pos.bottom },
-            turned_ ? theme_color(tcn, enabled_ ? tv_calm : tv_disabled, theme_) :
-                (focused_ ? theme_color(tcn, tv_disabled, theme_) :
-                    theme_color(window::tc, window::tv_background, theme_))
-        );
+        gr.draw_rect({ control_pos.left, control_pos.bottom - 3,
+            control_pos.left + text_rect_.width(), control_pos.bottom - 1 },
+            turned_ ? theme_color(tcn, tv_sheet, theme_) : theme_color(tcn, tv_disabled, theme_));
     }
 }
 
@@ -464,15 +500,12 @@ void button::receive_event(const event &ev)
         {
             case mouse_event_type::enter:
             {
-                active = true;
-                auto parent__ = parent_.lock();
-                if (parent__)
-                {
-                    set_cursor(parent__->context(), button_view_ != button_view::anchor ? cursor::default_ : cursor::hand);
-                }
+                active_ = true;
+                set_cursor(parent_, button_view_ != button_view::anchor ? cursor::default_ : cursor::hand);
                 redraw();
 
-                if (button_view_ == button_view::image && !caption.empty())
+                if (!caption.empty() && (button_view_ == button_view::image
+                    || button_view_ == button_view::image_menu))
                 {
                     tooltip_->show_on_control(*this, 5);
                 }
@@ -482,23 +515,21 @@ void button::receive_event(const event &ev)
             {
                 pushed = false;
 
-                if (button_view_ == button_view::image && !caption.empty())
+                if (!caption.empty() && (button_view_ == button_view::image
+                    || button_view_ == button_view::image_menu))
                 {
                     tooltip_->hide();
                 }
 
-                active = false;
-                auto parent__ = parent_.lock();
-                if (parent__)
-                {
-                    set_cursor(parent__->context(), cursor::default_);
-                }
+                active_ = false;
+                set_cursor(parent_, cursor::default_);
                 redraw();
             }
             break;
             case mouse_event_type::left_down:
                 pushed = true;
-                if (click_callback_down) {
+                if (click_callback_down)
+                {
                     click_callback_down();
                 }
                 redraw();
@@ -506,7 +537,7 @@ void button::receive_event(const event &ev)
             case mouse_event_type::left_up:
                 if (pushed)
                 {
-                    active = false;
+                    active_ = false;
                     tooltip_->hide();
 
                     if (button_view_ == button_view::switcher || button_view_ == button_view::radio)
@@ -522,7 +553,7 @@ void button::receive_event(const event &ev)
                     pushed = false;
                     redraw();
                 }
-            break;
+                break;
         }
     }
     else if (ev.type & event_type::internal)
@@ -549,7 +580,9 @@ void button::receive_event(const event &ev)
                 if (click_callback)
                 {
                     click_callback();
-                } else {
+                }
+                else
+                {
                     if (click_callback_down)
                     {
                         click_callback_down();
@@ -564,7 +597,7 @@ void button::receive_event(const event &ev)
 void button::set_position(const rect& position__)
 {
     position_ = position__;
-    position_org = position_;
+    position_org = position__;
 }
 
 rect button::position() const
@@ -572,9 +605,15 @@ rect button::position() const
     return get_control_position(position_, parent_);
 }
 
+void button::move(const int32_t dx, const int32_t dy)
+{
+    position_.move(dx, dy);
+    position_org = position_;
+}
+
 void button::set_parent(std::shared_ptr<window> window_)
 {
-    active = false;
+    active_ = false;
     focused_ = false;
 
     parent_ = window_;
@@ -642,11 +681,7 @@ void button::update_theme(std::shared_ptr<i_theme> theme__)
     tooltip_->update_theme(theme_);
 
     position_ = position_org;
-    if (button_view_ != button_view::image
-        && !caption_org.empty())
-    {
-        text_rect_ = {};
-    }
+    text_rect_.clear();
 
     if (button_view_ == button_view::switcher)
     {
@@ -701,14 +736,22 @@ bool button::showed() const
 
 void button::enable()
 {
-    enabled_ = true;
-    redraw();
+    if (!enabled_)
+    {
+        enabled_ = true;
+        if (image_) image_->enable();
+        redraw();
+    }
 }
 
 void button::disable()
 {
-    enabled_ = false;
-    redraw();
+    if (enabled_)
+    {
+        enabled_ = false;
+        if (image_) image_->disable();
+        redraw();
+    }
 }
 
 bool button::enabled() const
@@ -744,6 +787,7 @@ void button::set_image(int32_t resource_index)
     else
     {
         image_ = std::make_shared<image>(resource_index);
+        image_->redraw();
     }
 
     if (!image_->get_error().is_ok())
@@ -763,6 +807,7 @@ void button::set_image(std::string_view file_name)
     else
     {
         image_ = std::make_shared<image>(file_name);
+        image_->redraw();
     }
 
     if (!image_->get_error().is_ok())
@@ -781,6 +826,7 @@ void button::set_image(const std::vector<uint8_t> &image_data)
     else
     {
         image_ = std::make_shared<image>(image_data);
+        image_->redraw();
     }
 
     if (!image_->get_error().is_ok())

@@ -18,8 +18,7 @@ tray_icon::tray_icon(std::weak_ptr<window> parent__, int32_t icon_resource_index
     icon_resource_index(icon_resource_index_),
     icon_file_name(),
     tip(tip_),
-    click_callback(click_callback_),
-    my_subscriber_id()
+    click_callback(click_callback_)
 {
     auto parent_ = parent.lock();
     if (parent_)
@@ -48,8 +47,7 @@ tray_icon::tray_icon(std::weak_ptr<window> parent__, std::string_view icon_file_
 #endif
     icon_file_name(icon_file_name_),
     tip(tip_),
-    click_callback(click_callback_),
-    my_subscriber_id()
+    click_callback(click_callback_)
 {
     auto parent_ = parent.lock();
     if (parent_)

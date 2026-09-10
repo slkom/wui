@@ -27,6 +27,7 @@ namespace wui
 #ifdef __linux__
 
 // TODO:  i_listener, скрыть stop()
+// https://evgenykislov.com/cpp-styleguide/cpp-styleguide-archive/cpp-styleguide-012023/
 class listener
 {
 public:
@@ -80,6 +81,7 @@ private:
     std::unordered_map<xcb_window_t, wnd> windows;
 
     error err;
+
 
     void start();
     void process_events();
@@ -150,12 +152,17 @@ public:
 
     [[nodiscard]] error get_error() const { return err; }
 
+    void stop()
+    {
+        // assert(windows.empty());
+        windows.clear();
+    };
+
 private:
     std::unordered_map<void*, wnd> windows;
 
     error err;
 
-    //void stop() { };
     //void start() { };
 };
 

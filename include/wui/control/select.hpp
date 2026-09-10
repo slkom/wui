@@ -23,7 +23,7 @@
 namespace wui
 {
 
-struct select_item;
+struct select_item; // TODO: ? move to class select
 
 typedef std::vector<select_item> select_items_t;
 
@@ -49,6 +49,7 @@ public:
 
     virtual void set_position(const rect& position) override;
     [[nodiscard]] virtual rect position() const override;
+    virtual void move(const int32_t dx, const int32_t dy) override;
 
     virtual void set_parent(std::shared_ptr<window> window_) override;
     [[nodiscard]] virtual std::weak_ptr<window> parent() const override;
@@ -86,7 +87,7 @@ public:
     [[nodiscard]] select_item selected_item() const;
     [[nodiscard]] const select_items_t &items() const;
 
-    void set_change_callback(std::function<void(int32_t /* number */, int64_t /* id */)> change_callback) noexcept;
+    void set_change_callback(std::function<void(int32_t /* n_item */, int64_t /* id */)> change_callback) noexcept;
     [[nodiscard]] int32_t get_font_size() const;
 
     void redraw();
@@ -98,7 +99,6 @@ public:
     /// Used theme values
     static constexpr const char *tv_background = "background";
     static constexpr const char *tv_border = "border";
-    static constexpr const char *tv_border_width = "border_width";
     static constexpr const char *tv_hover_border = "hover_border";
     static constexpr const char *tv_focused_border = "focused_border";
     static constexpr const char *tv_button_calm = "button_calm";
@@ -109,13 +109,16 @@ public:
     static constexpr const char *tv_scrollbar_slider_acive = "scrollbar_slider_active";
     static constexpr const char *tv_selected_item = "selected_item";
     static constexpr const char *tv_active_item = "active_item";
+    static constexpr const char *tv_border_width = "border_width";
+    static constexpr const char* tv_border_item = "border_item";
+    static constexpr const char* tv_item_indent = "item_indent";
     static constexpr const char *tv_round = "round";
     static constexpr const char *tv_font = "font";
 
 private:
     std::vector<select_item> items_;
 
-    std::function<void(int32_t, int64_t)> change_callback;
+    std::function<void(int32_t n_item, int64_t id)> change_callback;
 
     std::string tcn; /// control name in theme
     std::shared_ptr<i_theme> theme_;
@@ -128,7 +131,7 @@ private:
     std::shared_ptr<i_theme> list_theme;
     std::shared_ptr<list> list_;
 
-    bool showed_, enabled_, active, topmost_;
+    bool showed_, enabled_, active_, topmost_;
     bool focused_;
     bool focusing_;
 

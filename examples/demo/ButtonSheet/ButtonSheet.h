@@ -25,7 +25,7 @@ public:
     void End();
 
     void UpdateSize(int32_t width, int32_t height);
-
+    void SetDisableButtons(bool disable);
 private:
     std::weak_ptr<wui::window> parentWindow_;
 
@@ -35,7 +35,8 @@ private:
     std::shared_ptr<wui::button> imageButton;
     std::shared_ptr<wui::button> imageRightTextButton;
     std::shared_ptr<wui::button> imageBottomTextButton;
-    std::shared_ptr<wui::button> switcherButton;
+    std::shared_ptr<wui::button> switcherButton1;
+    std::shared_ptr<wui::button> switcherButton2;
     std::shared_ptr<wui::button> radioButton0, radioButton1;
     std::shared_ptr<wui::button> anchorButton;
     std::shared_ptr<wui::button> sheetButton0, sheetButton1;

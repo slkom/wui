@@ -189,7 +189,7 @@ void theme_impl::load_json(std::string_view json_)
                                 get_red_bgra(color_),
                                 get_green_bgra(color_),
                                 get_blue_bgra(color_)
-                                , 0 != get_alpha_bgra(color_) ? get_alpha_bgra(color_) : 0xFFU
+                                , 0 != get_alpha_bgra(color_) ? get_alpha_bgra(color_) : 0xFF
                             );
                         }
                         catch (...)

@@ -39,7 +39,6 @@ struct font
 {
     std::string name;
     int32_t size{ 1 };
-
     decorations decorations_{ decorations::normal };
 };
 

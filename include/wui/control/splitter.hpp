@@ -22,16 +22,16 @@
 namespace wui
 {
 
-enum class splitter_orientation
-{
-    vertical,
-    horizontal
-};
-
 class splitter : public i_control, public std::enable_shared_from_this<splitter>
 {
 public:
-    splitter(splitter_orientation orientation, std::function<void(int32_t, int32_t)> callback, std::string_view theme_control_name = tc, std::shared_ptr<i_theme> theme_ = nullptr);
+    enum class orientation
+    {
+        vertical,
+        horizontal
+    };
+
+    splitter(orientation orientation, std::function<void(int32_t, int32_t)> callback, std::string_view theme_control_name = tc, std::shared_ptr<i_theme> theme_ = nullptr);
 
     virtual ~splitter();
 
@@ -40,6 +40,7 @@ public:
 
     virtual void set_position(const rect& position) override;
     [[nodiscard]] virtual rect position() const override;
+    virtual void move(const int32_t dx, const int32_t dy) override;
 
     virtual void set_parent(std::shared_ptr<window> window_) override;
     [[nodiscard]] virtual std::weak_ptr<window> parent() const override;
@@ -66,7 +67,9 @@ public:
 
 public:
     /// Splitter interface
-    void set_callback(std::function<void(int32_t, int32_t)> callback_);
+    void set_callback(std::function<void(int32_t, int32_t)> callback_); // оставлен для совместимости
+    // NB:  prev_pos : позволяет вычислить смещение
+    void set_callback_ex(std::function<void(const rect& pos, const rect& prev_pos)> callback_);
 
     void set_margins(int32_t min_, int32_t max_);
 
@@ -81,24 +84,28 @@ public:
     static constexpr const char *tv_active = "active";
 
 private:
-    splitter_orientation orientation;
-    std::function<void(int32_t, int32_t)> callback;
+    orientation orientation_;
+    std::function<void(int32_t, int32_t)> callback1; // оставлен для совместимости
+    std::function<void(const rect& , const rect& )> callback;
     int32_t margin_min, margin_max;
 
     std::string tcn; /// control name in theme
     std::shared_ptr<i_theme> theme_;
 
     rect position_;
+    rect prev_pos;
 
     std::weak_ptr<window> parent_;
     std::string my_control_sid, my_plain_sid;
 
     bool showed_, enabled_, active, topmost_;
-    rect prev_pos;
 
     void receive_control_events(const event &ev);
     void receive_plain_events(const event &ev);
 
 };
+
+// для совместимости
+typedef enum class splitter::orientation splitter_orientation;
 
 }

@@ -120,7 +120,7 @@ int32_t theme_dimension(std::string_view control, std::string_view value, std::s
     return 0;
 }
 
-const std::string &theme_string(std::string_view control, std::string_view value, std::shared_ptr<i_theme> theme_)
+const std::string& theme_string(std::string_view control, std::string_view value, std::shared_ptr<i_theme> theme_)
 {
     if (theme_)
     {
@@ -137,13 +137,13 @@ font theme_font(std::string_view control, std::string_view value, std::shared_pt
 {
     if (theme_)
     {
-        return theme_->get_font(control, value);
+        return std::move(theme_->get_font(control, value));
     }
     else if (instance)
     {
-        return instance->get_font(control, value);
+        return std::move(instance->get_font(control, value));
     }
-    return font();
+    return {};
 }
 
 const std::vector<uint8_t> &theme_image(std::string_view name, std::shared_ptr<i_theme> theme_)

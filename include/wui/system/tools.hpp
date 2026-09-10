@@ -15,6 +15,7 @@
 #include <wui/common/font.hpp>
 #include <wui/common/error.hpp>
 #include <wui/system/system_context.hpp>
+#include <wui/window/window.hpp>
 
 namespace wui
 {
@@ -41,7 +42,62 @@ enum class cursor
     size_ns
 };
 
-void set_cursor(system_context &context, const cursor cursor_);
+namespace detail
+{
+    struct cursor_state
+    {
+        inline static cursor _cursor{ cursor::no_ };
+    };
+
+#ifndef _WIN32
+    void set_cursor(system_context* context_, const cursor cursor_);
+#endif
+}
+
+inline void reset_cursor()
+{
+    detail::cursor_state::_cursor = cursor::no_;
+}
+
+#ifdef _WIN32
+
+void set_cursor(system_context* context [[maybe_unused]], const cursor cursor_);
+
+// The weak_ptr constructor is more efficient than weak_ptr::lock().
+inline void set_cursor(std::weak_ptr<window> parent [[maybe_unused]], const cursor cursor_)
+{
+    set_cursor(nullptr, cursor_);
+}
+
+#else
+
+inline void set_cursor(system_context* context, const cursor cursor_)
+{
+    if (cursor_ == detail::cursor_state::_cursor)
+    {
+        return; // prevention of costly operations
+    }
+    detail::set_cursor(context, cursor_);
+}
+
+// The weak_ptr constructor is more efficient than weak_ptr::lock().
+inline void set_cursor(std::weak_ptr<window> parent, const cursor cursor_)
+{
+    if (cursor_ == detail::cursor_state::_cursor)
+    {
+        return;  // prevention of costly operations
+    }
+
+    auto parent_ = parent.lock();
+    if (!parent_)
+    {
+        return;
+    }
+    detail::set_cursor(&parent_->context(), cursor_);
+}
+
+#endif
+
 void reset_cursor();
 
 /// This function helps to place controls on the window from top to bottom

@@ -44,11 +44,10 @@ bool set_default_theme_from_name(std::string_view name, error &err);
 [[nodiscard]] int32_t theme_dimension(std::string_view control, std::string_view value, std::shared_ptr<i_theme> theme_ = nullptr);
 
 /// Return the item's string value by current theme
-[[nodiscard]] const std::string &theme_string(std::string_view control, std::string_view value, std::shared_ptr<i_theme> theme_ = nullptr);
+[[nodiscard]] const std::string& theme_string(std::string_view control, std::string_view value, std::shared_ptr<i_theme> theme_ = nullptr);
 
 /// Return the item's font value by current theme
 [[nodiscard]] font theme_font(std::string_view control, std::string_view value, std::shared_ptr<i_theme> theme_ = nullptr);
-
 [[nodiscard]] const std::vector<uint8_t> &theme_image(std::string_view name, std::shared_ptr<i_theme> theme_ = nullptr);
 
 }

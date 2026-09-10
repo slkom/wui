@@ -12,7 +12,6 @@
 #include <wui/graphic/graphic.hpp>
 #include <wui/event/event.hpp>
 #include <wui/common/rect.hpp>
-#include <wui/common/color.hpp>
 
 #include <string>
 #include <functional>
@@ -34,7 +33,8 @@ enum class button_view
     switcher,
     radio,
     anchor,
-    sheet
+    sheet,
+    image_menu /// no border if control is not focused or active
 };
 
 class button : public i_control, public std::enable_shared_from_this<button>
@@ -55,6 +55,7 @@ public:
 
     virtual void set_position(const rect& position) override;
     [[nodiscard]] virtual rect position() const override;
+    virtual void move(const int32_t dx, const int32_t dy) override;
 
     virtual void set_parent(std::shared_ptr<window> window_) override;
     [[nodiscard]] virtual std::weak_ptr<window> parent() const override;
@@ -115,6 +116,7 @@ public:
     static constexpr const char *tv_border = "border";
     static constexpr const char *tv_border_width = "border_width";
     static constexpr const char *tv_hover_border = "hover_border";
+    static constexpr const char *tv_sheet = "sheet";
     static constexpr const char *tv_focused_border = "focused_border";
     static constexpr const char *tv_text = "text";
     static constexpr const char *tv_disabled = "disabled";
@@ -126,6 +128,7 @@ public:
     ///Used theme images
     static constexpr const char *ti_switcher_off = "button_switcher_off";
     static constexpr const char *ti_switcher_on = "button_switcher_on";
+
     static constexpr const char *ti_radio_off = "button_radio_off";
     static constexpr const char *ti_radio_on = "button_radio_on";
 
@@ -157,14 +160,14 @@ private:
     std::string my_subscriber_id;
 
     bool showed_, enabled_, topmost_;
-    bool active, focused_;
+    bool active_, focused_;
     bool focusing_;
 
     bool pushed;
 
     bool turned_;
 
-    rect text_rect_;
+    rect text_rect_{};
 
     error err;
 

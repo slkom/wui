@@ -19,8 +19,12 @@
 
 #include <algorithm>
 
-#undef min
-#undef max
+#ifdef min
+#   undef min
+#endif
+#ifdef max
+#   undef max
+#endif
 
 namespace wui
 {
@@ -75,7 +79,6 @@ menu::menu(std::string_view theme_control_name, std::shared_ptr<i_theme> theme__
     tcn(theme_control_name),
     theme_(theme__),
     position_{ 0 },
-    activation_control(),
     indent(0), x(-1), y(-1),
     max_text_width(0), max_hotkey_width(0),
     item_height_(32),
@@ -120,6 +123,12 @@ rect menu::position() const
     return list_->position();
 }
 
+void menu::move(const int32_t dx, const int32_t dy)
+{
+    position_.move(dx, dy);
+    set_position(position_);
+}
+
 void menu::set_parent(std::shared_ptr<window> window)
 {
     parent_ = window;
@@ -156,11 +165,14 @@ void menu::update_list_theme()
 
     list_theme->set_color(list::tc, list::tv_background, theme_color(tcn, tv_background, theme_));
     list_theme->set_color(list::tc, list::tv_border, theme_color(tcn, tv_border, theme_));
-    list_theme->set_color(list::tc, list::tv_focused_border, theme_color(tcn, tv_border, theme_));
-    list_theme->set_dimension(list::tc, list::tv_border_width, theme_dimension(tcn, tv_border_width, theme_));
+
     list_theme->set_color(scroll::tc, scroll::tv_background, theme_color(tcn, tv_scrollbar, theme_));
     list_theme->set_color(scroll::tc, scroll::tv_slider, theme_color(tcn, tv_scrollbar_slider, theme_));
     list_theme->set_color(scroll::tc, scroll::tv_slider_acive, theme_color(tcn, tv_scrollbar_slider_acive, theme_));
+
+    list_theme->set_dimension(list::tc, list::tv_border_width, theme_dimension(tcn, tv_border_width, theme_));
+    list_theme->set_dimension(list::tc, list::tv_border_item, theme_dimension(tcn, tv_border_item, theme_));
+    list_theme->set_dimension(list::tc, list::tv_item_indent, theme_dimension(tcn, tv_item_indent, theme_));
     list_theme->set_dimension(list::tc, list::tv_round, theme_dimension(tcn, tv_round, theme_));
 
     list_->update_theme(list_theme);
@@ -249,9 +261,6 @@ void menu::update_theme(std::shared_ptr<i_theme> theme__)
     size_updated = false;
 }
 
-//TODO: непонятно, что делает? проверить...
-// вызываем show_on_control(), showed_ не устанавливается
-// ? установка showed_ = true блокирует меню...
 void menu::show()
 {
     if (showed_)
@@ -271,7 +280,6 @@ void menu::hide()
     list_->hide();
 }
 
-// ? return showed_ || list_->showed() блокирует меню...
 bool menu::showed() const
 {
     return showed_;
@@ -362,19 +370,20 @@ void menu::update_size()
         return;
     }
 
+    auto parent__ = parent_.lock();
+
     const auto font_ = std::move(theme_font(tcn, tv_font, theme_));
 
     max_text_width = 0, max_hotkey_width = 0;
 
     const auto items_count = calc_items_count(items);
-    for (int i = 0; i != items_count; ++i)
+    for (int i = 0; i < items_count; ++i)
     {
         auto *item = get_item(items, i);
         if (!item)
         {
             continue;
         }
-        auto parent__ = parent_.lock();
         const auto text_width = measure_text(item->text, font_, parent__ ? &parent__->get_graphic() : nullptr).right;
         auto hotkey_width = measure_text(item->hotkey, font_, parent__ ? &parent__->get_graphic() : nullptr).right;
         if (hotkey_width != 0)
@@ -386,7 +395,7 @@ void menu::update_size()
             max_hotkey_width = hotkey_width;
         }
 
-        const auto width = (item->level * item_height_) + text_width + max_hotkey_width + (item_height_ * 3);
+        const auto width = (item->level + 3) * item_height_ + text_width + max_hotkey_width;
         if (width > max_text_width)
         {
             max_text_width = width;
@@ -432,8 +441,8 @@ void menu::show_on_control(std::shared_ptr<i_control> control, int32_t indent_, 
     auto pos = get_popup_position(parent_, base_pos, position_, indent);
 
     list_->set_position(pos);
-    list_->show();
 
+    list_->show();
     auto parent__ = parent_.lock();
     if (parent__)
     {
@@ -469,7 +478,7 @@ void menu::draw_arrow_down(graphic &gr, const rect& pos, const bool expanded)
     }
 }
 
-void menu::draw_list_item(graphic& gr, const int32_t n_item, const rect& item_rect,
+void menu::draw_list_item(graphic &gr, const int32_t n_item, const rect& item_rect,
     const list::item_state state)
 {
     auto item = get_item(items, n_item);
@@ -480,11 +489,11 @@ void menu::draw_list_item(graphic& gr, const int32_t n_item, const rect& item_re
 
     if (state == list::item_state::selected)
     {
-        gr.draw_rect({ item_rect.left, item_rect.top, item_rect.right, item_rect.bottom },
+        gr.draw_rect({ item_rect.left, item_rect.top + 2, item_rect.right, item_rect.bottom - 2 },
             theme_color(tcn, tv_selected_item));
     }
 
-    const auto height = item_rect.height();
+    const auto height = item_height_;// item_rect.height();
     if (item->image_)
     {
         const auto img_size = static_cast<int32_t>(height * 0.9);
@@ -511,14 +520,14 @@ void menu::draw_list_item(graphic& gr, const int32_t n_item, const rect& item_re
 
     if (!item->hotkey.empty())
     {
-        gr.draw_text({ item_rect.right - max_hotkey_width - height / 2,
+        gr.draw_text({ item_rect.right - max_hotkey_width - height/2,
             item_rect.top + (height - text_height) / 2 },
             item->hotkey, text_color, font_);
     }
 
     if (!item->children.empty())
     {
-        const auto left = item_rect.right - height;
+        const auto left = item_rect.right - height; //  + (height - 8) / 2
         const auto top = item_rect.top + (height - 4) / 2;
 
         draw_arrow_down(gr, { left, top }, item->state == menu_item_state::expanded);
@@ -564,9 +573,7 @@ void menu::activate_list_item(const int32_t n_item)
 
     if (item->click_callback && item->state != menu_item_state::disabled)
     {
-        // ID позволяет идентифицировать item, в отличии от n_item
         item->click_callback(item->id);
-        //item->click_callback(n_item);
     }
 }
 

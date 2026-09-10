@@ -34,7 +34,7 @@ theme_params get_app_theme(std::string_view name)
     {
         return *l;
     }
-    
+
     /// We don't find the theme by name, try to return default theme
     l = std::find(instance.begin(), instance.end(), default_theme);
     if (l != instance.end())

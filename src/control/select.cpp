@@ -16,9 +16,6 @@
 
 #include <wui/system/tools.hpp>
 
-#include <boost/nowide/convert.hpp>
-#include <utf8/utf8.h>
-
 #include <algorithm>
 
 namespace wui
@@ -33,7 +30,7 @@ select::select(std::string_view theme_control_name, std::shared_ptr<i_theme> the
     position_{ 0 },
     list_theme(make_custom_theme()),
     list_(std::make_shared<list>(list::tc, list_theme)),
-    showed_(true), enabled_(true), active(false), topmost_(false),
+    showed_(true), enabled_(true), active_(false), topmost_(false),
     focused_(false),
     focusing_(true),
     left_shift(0),
@@ -75,7 +72,7 @@ void select::draw(graphic &gr, const rect&)
 
     auto border_color = focused_
         ? theme_color(tcn, tv_focused_border, theme_)
-        : (!active ? theme_color(tcn, tv_border, theme_) : theme_color(tcn, tv_hover_border, theme_));
+        : (!active_ ? theme_color(tcn, tv_border, theme_) : theme_color(tcn, tv_hover_border, theme_));
 
     /// Draw the frame
     gr.draw_rect(control_pos,
@@ -114,7 +111,7 @@ void select::draw(graphic &gr, const rect&)
 
 void select::draw_arrow_down(graphic &gr, const rect &pos)
 {
-    auto color = get_rgb(theme_color(tcn, !active ? tv_border : tv_focused_border, theme_));
+    auto color = get_rgb(theme_color(tcn, !active_ ? tv_border : tv_focused_border, theme_));
 
     constexpr int h = 4;
     int w = 8;
@@ -182,11 +179,11 @@ void select::receive_control_events(const event &ev)
         switch (ev.mouse_event_.type)
         {
             case mouse_event_type::enter:
-                active = true;
+                active_ = true;
                 redraw();
             break;
             case mouse_event_type::leave:
-                active = false;
+                active_ = false;
                 redraw();
             break;
             case mouse_event_type::wheel:
@@ -230,6 +227,16 @@ void select::receive_control_events(const event &ev)
                         {
                             list_->select_item(0);
                             redraw();
+                        }
+                    break;
+                    case vk_return: case vk_rreturn: // not used
+                        if (!list_->showed())
+                        {
+                            show_list();
+                        }
+                        else
+                        {
+                            list_->hide();
                         }
                     break;
                     case vk_end: case vk_nend: case vk_page_down: case vk_npage_down:
@@ -308,12 +315,18 @@ void select::update_list_theme()
 
     list_theme->set_color(list::tc, list::tv_background, theme_color(tcn, tv_background, theme_));
     list_theme->set_color(list::tc, list::tv_border, theme_color(tcn, tv_border, theme_));
-    list_theme->set_color(list::tc, list::tv_focused_border, theme_color(tcn, tv_border, theme_));
-    list_theme->set_dimension(list::tc, list::tv_border_width, theme_dimension(tcn, tv_border_width, theme_));
+    list_theme->set_color(list::tc, list::tv_hover_border, theme_color(tcn, tv_hover_border, theme_));
+    list_theme->set_color(list::tc, list::tv_focused_border, theme_color(tcn, tv_focused_border, theme_));
     list_theme->set_color(scroll::tc, scroll::tv_background, theme_color(tcn, tv_scrollbar, theme_));
     list_theme->set_color(scroll::tc, scroll::tv_slider, theme_color(tcn, tv_scrollbar_slider, theme_));
     list_theme->set_color(scroll::tc, scroll::tv_slider_acive, theme_color(tcn, tv_scrollbar_slider_acive, theme_));
+
+    list_theme->set_dimension(list::tc, list::tv_border_width, theme_dimension(tcn, tv_border_width, theme_));
+    list_theme->set_dimension(list::tc, list::tv_border_item, theme_dimension(tcn, tv_border_item, theme_));
+    list_theme->set_dimension(list::tc, list::tv_item_indent, theme_dimension(tcn, tv_item_indent, theme_));
     list_theme->set_dimension(list::tc, list::tv_round, theme_dimension(tcn, tv_round, theme_));
+
+    list_->update_theme(list_theme);
 }
 
 void select::set_position(const rect& position__)
@@ -332,6 +345,12 @@ void select::set_position(const rect& position__)
 rect select::position() const
 {
     return get_control_position(position_, parent_);
+}
+
+void select::move(const int32_t dx, const int32_t dy)
+{
+    position_.move(dx, dy);
+    set_position(position_);
 }
 
 void select::set_parent(std::shared_ptr<window> window_)
@@ -500,6 +519,7 @@ void select::set_item_height(const int32_t item_height__) noexcept
     item_height_ = item_height__;
 }
 
+// TODO: int64_t
 void select::select_item_number(const int32_t index)
 {
     if (index < 0 || index >= list_->get_item_count())
@@ -512,11 +532,12 @@ void select::select_item_number(const int32_t index)
 
 void select::select_item_id(const int64_t id)
 {
-    for (int32_t i = 0; i != static_cast<int32_t>(items_.size()); ++i)
+    const size_t icz = items_.size();
+    for (size_t i = 0; i < icz; ++i)
     {
         if (items_[i].id == id)
         {
-            select_item_number(i);
+            select_item_number(static_cast<int32_t>(i));
             break;
         }
     }
@@ -577,7 +598,7 @@ void select::draw_list_item(graphic &gr, const int32_t n_item, const rect &item_
     }
 
     auto text_color = theme_color(tcn, tv_text);
-    auto font = theme_font(tcn, tv_font);
+    auto font = std::move(theme_font(tcn, tv_font));
 
     auto text = items_[n_item].text;
 

@@ -22,7 +22,7 @@ public:
     virtual ~theme_impl() = default;
 
     [[nodiscard]] virtual std::string get_name() const override;
-    virtual void set_name(std::string_view name__) override;
+    virtual void set_name(std::string_view name_) override;
 
     [[nodiscard]] virtual bool is_color(std::string_view control, std::string_view value) const override;
     virtual void set_color(std::string_view control, std::string_view value, color color_) override;

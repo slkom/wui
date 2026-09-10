@@ -18,16 +18,11 @@
 #include <cairo-xcb.h>
 #include <cmath>
 
-//#define _CAIRO_RESIZE_FONT // tested option
+//#define _CAIRO_RESIZE_FONT
 #endif
 
 namespace wui
 {
-
-primitive_container::primitive_container(wui::system_context &context__)
-    : context_(context__)
-{
-}
 
 primitive_container::~primitive_container()
 {
@@ -103,7 +98,7 @@ HBRUSH primitive_container::get_brush(const color color_)
 
 HFONT primitive_container::get_font(const font& font_)
 {
-    auto it = fonts.find({ {font_.name, font_.size }, font_.decorations_ });
+    auto it = fonts.find({ { font_.name, font_.size }, font_.decorations_ });
     if (it != fonts.end())
     {
         return it->second;
@@ -125,14 +120,8 @@ HFONT primitive_container::get_font(const font& font_)
         DEFAULT_PITCH | FF_DONTCARE,
         0
     };
-    std::wstring font_name = boost::nowide::widen(font_.name);
-#if 0
-    const size_t length = font_name.length() < LF_FACESIZE ? font_name.length() : LF_FACESIZE - 1;
-    std::memcpy(log_font.lfFaceName, font_name.data(), length * sizeof(WCHAR));
-    log_font.lfFaceName[length] = 0x0000;
-#else
+    std::wstring font_name = std::move(boost::nowide::widen(font_.name));
     StringCchCopyW(log_font.lfFaceName, LF_FACESIZE, font_name.c_str());
-#endif
     HFONT font__ = CreateFontIndirectW(&log_font);
 
     fonts[{ {font_.name, font_.size }, font_.decorations_ }] = font__;
@@ -206,6 +195,7 @@ xcb_gcontext_t primitive_container::get_gc(const color color_)
         err.set(error_type::no_handle, "primitive_container::get_gc(color)", "no context_.connection");
         return -1;
     }
+
     const auto color__ = conv_rgba_to_bgr(color_);
     auto it = gcs.find(color__);
     if (it != gcs.end())

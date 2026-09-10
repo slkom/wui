@@ -64,7 +64,7 @@ bool set_locale_from_type(locale_type type, error &err)
     bool ok = wui::set_locale_from_file(locale_params.type, locale_params.name, locale_params.file_name);
 #endif
 
-    err = instance->get_error();
+    err = std::move(instance->get_error());
     return ok;
 }
 

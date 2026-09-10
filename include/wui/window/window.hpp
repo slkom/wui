@@ -14,6 +14,7 @@
 #include <wui/graphic/graphic.hpp>
 #include <wui/common/rect.hpp>
 
+#include <limits>
 #include <atomic>
 #include <vector>
 #include <memory>
@@ -75,6 +76,7 @@ public:
 
     virtual void set_position(const rect& position) override;
     [[nodiscard]] virtual rect position() const override;
+    virtual void move(const int32_t dx, const int32_t dy) override;
 
     virtual void set_parent(std::shared_ptr<window> window_) override;
     [[nodiscard]] virtual std::weak_ptr<window> parent() const override;
@@ -83,8 +85,9 @@ public:
     virtual void set_topmost(bool yes) override;
     [[nodiscard]] virtual bool topmost() const override;
 
-    [[nodiscard]] virtual bool focused() const override;
-    [[nodiscard]] virtual bool focusing() const override;
+    [[nodiscard]] virtual bool focused() const override;    // only ctrl
+    [[nodiscard]] virtual bool focusing() const override;   // only ctrl
+    [[nodiscard]] virtual focus_mode get_focus_mode() const override;
 
     virtual void update_theme_control_name(std::string_view theme_control_name) override;
     virtual void update_theme(std::shared_ptr<i_theme> theme_ = nullptr) override;
@@ -109,12 +112,13 @@ public:
     void set_min_size(int32_t width, int32_t height);
 
     /// <summary>
-    /// set the preferred window position using the `transient window` position
+    /// Set window preferred position use transient window position
     /// </summary>
-    /// <param name="width__"> new width </param>
-    /// <param name="height__">new height </param>
+    /// <param name="width__"></param>
+    /// <param name="height__"></param>
     void set_tw_preferred_position(const int32_t width__, const int32_t height__);
 
+    // Set parent window for this transient window
     void set_transient_for(std::shared_ptr<window> window_, bool docked = true);
 
     /// Window state methods
@@ -157,7 +161,14 @@ public:
     }
 
     /// Get the type of this window
-    [[nodiscard]] bool is_physical_window() const;
+    [[nodiscard]] bool is_physical_window() const
+    {
+#ifdef _WIN32
+        return root_window_ || (context_.hwnd != NULL);
+#elif __linux__
+        return root_window_ || (context_.connection && context_.wnd);
+#endif
+    }
 
     [[nodiscard]] bool docked() const
     {
@@ -172,6 +183,21 @@ public:
     {
         return theme_;
     }
+    void set_focus_mode(const focus_mode mode)
+    {
+        if (mode & focus_mode::always)
+        {
+            focus_mode_ = focus_mode::wnd | focus_mode::always;
+            return;
+        }
+        if (mode & focus_mode::react)
+        {
+            focus_mode_ = focus_mode::wnd | focus_mode::react;
+            return;
+        }
+        focus_mode_ = focus_mode::wnd | focus_mode::default_;
+    }
+
     [[nodiscard]] rect get_parent_position();
 
 public:
@@ -181,6 +207,7 @@ public:
     /// Used theme values
     static constexpr const char *tv_background = "background";
     static constexpr const char *tv_border = "border";
+    static constexpr const char *tv_border_focus = "border_focus";
     static constexpr const char *tv_round = "round";
     static constexpr const char *tv_border_width = "border_width";
     static constexpr const char *tv_text = "text";
@@ -202,6 +229,9 @@ public:
     static constexpr const char *cl_light_theme = "light_theme";
     static constexpr const char *cl_switch_lang = "switch_lang";
 
+    static constexpr const int32_t _border_select_height = 2;
+    static constexpr int32_t _btn_width = 42, _btn_height = 28;
+    static constexpr int32_t _btn_width_child = 26, _btn_height_child = 12;
 private:
     bool _destroy();
 
@@ -216,6 +246,8 @@ private:
 
     std::vector<std::shared_ptr<i_control>> controls;
     std::shared_ptr<i_control> active_control;
+    std::shared_ptr<i_control> focused_control;
+    std::shared_ptr<i_control> input_control;
 
     std::string caption;
     rect position_, parent_position_, normal_position;
@@ -233,17 +265,19 @@ private:
     /// Set this window always physical
     bool root_window_;
 
-    bool docked_;
+    bool docked_{ false };
+    bool docked_setup{ false }; // initially docked during setup
     bool exit_{ false };
     std::atomic<bool> skip_draw_;
 
-    size_t focused_index;
+    focus_mode focus_mode_{ focus_mode::wnd | focus_mode::default_ };
 
     std::weak_ptr<window> parent_;
-    std::string my_control_sid, my_plain_sid;
+    std::weak_ptr<window> transient_window; // parent window for this transient window
+    std::shared_ptr<window> docked_control;
+    std::shared_ptr<window> selected_child;
 
-    std::weak_ptr<window> transient_window;
-    std::shared_ptr<i_control> docked_control;
+    std::string my_control_sid, my_plain_sid;
 
     struct event_subscriber
     {
@@ -318,11 +352,13 @@ private:
     void process_events(xcb_generic_event_t &e);
 
     void init_atoms();
+    void set_size_hints();
+
 
     void send_destroy_event();
 
     void change_style(xcb_atom_t type, xcb_atom_t action,
-        xcb_atom_t style1, xcb_atom_t style2 = 0) noexcept;
+        xcb_atom_t style1, xcb_atom_t style2=0) noexcept;
 
     void update_window_style();
 
@@ -343,21 +379,34 @@ private:
     [[nodiscard]] bool check_control_here(int32_t x, int32_t y);
 
     void change_focus();
+    void remove_focus();
+    void selected_child_remove_focus();
+
     void execute_focused();
-    void set_focused(size_t index);
+    void set_next_focused(const bool next=false);
+    void set_input_focused();
+    void setup_input_focused();
+    std::shared_ptr<window> get_next_window();
+
     [[nodiscard]] std::shared_ptr<i_control> get_focused();
 
-    void start_docking(std::shared_ptr<i_control> control);
+//    void start_docking(std::shared_ptr<i_control> control);
+    void start_docking(std::shared_ptr<window> control);
     void end_docking();
+
     [[nodiscard]] std::shared_ptr<window> get_transient_window();
 
     void update_button_images();
     void update_buttons();
 
-    void draw_border(graphic &gr);
-    void draw_caption(graphic& gr, rect paint_rect);
+    void draw_border(graphic &gr, const color c, int32_t border_width);
+    void draw_selected_border(graphic &gr, int32_t border_width);
+    void draw_caption(graphic& gr, const rect &paint_rect, const int32_t border_width);
 
     void send_internal(internal_event_type type, int32_t x, int32_t y);
+
+    bool focused_{ false }; // true : this window focused
+    //bool _active{ false }; // true : this window active
 
     friend listener;
 };

@@ -27,7 +27,7 @@ namespace wui
 
 void clipboard_put(std::string_view text, system_context &context)
 {
-    auto wide_str = boost::nowide::widen(text);
+    auto wide_str = std::move(boost::nowide::widen(text));
 
     if (OpenClipboard(context.hwnd))
     {

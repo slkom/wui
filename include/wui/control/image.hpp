@@ -43,6 +43,7 @@ public:
     virtual void set_position(const rect& position) override;
     [[nodiscard]] virtual std::weak_ptr<window> parent() const override;
     [[nodiscard]] virtual rect position() const override;
+    virtual void move(const int32_t dx, const int32_t dy) override;
 
     virtual void set_parent(std::shared_ptr<window> window_) override;
     virtual void clear_parent() override;
@@ -96,7 +97,7 @@ private:
 
     std::weak_ptr<window> parent_;
 
-    bool showed_, topmost_;
+    bool showed_, enabled_, topmost_;
 
     std::string file_name;
     std::string path_;
@@ -104,8 +105,10 @@ private:
     std::string theme_name;
 
 #ifdef _WIN32
+    void init_color_state();
     int32_t resource_index;
     Gdiplus::Image *img;
+    Gdiplus::ImageAttributes attributes_gray;
 #elif __linux__
     cairo_surface_t *img;
 #endif

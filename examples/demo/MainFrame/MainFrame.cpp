@@ -15,7 +15,6 @@
 #include <wui/theme/theme_selector.hpp>
 
 #include <wui/locale/locale.hpp>
-//#include <wui/locale/locale_selector.hpp>
 
 #include <MainFrame/MainFrame.h>
 
@@ -37,12 +36,9 @@ MainFrame::MainFrame()
     panelSheet   (std::make_shared<wui::button>(wui::locale("main_frame", "other_sheet_"),  [this](){ sheet = Sheet::Others; UpdateSheets(); }, wui::button_view::sheet)),
 
     accountButton(std::make_shared<wui::button>(wui::locale("main_frame", "account_btn"),   []() {}, wui::button_view::image, IMG_ACCOUNT, 32, wui::button::tc_tool)),
-    menuButton   (std::make_shared<wui::button>(wui::locale("main_frame", "main_menu"),     []() {}, wui::button_view::image, IMG_MENU,    32, wui::button::tc_tool)),
+    menuButton   (std::make_shared<wui::button>(wui::locale("main_frame", "main_menu"),     []() {}, wui::button_view::image_menu, IMG_MENU, 32, wui::button::tc_tool)),
 
-    sheet(Sheet::Main),
-
-    mainSheetImpl(),
-    buttonSheetImpl()
+    sheet(Sheet::Main)
 {
     window->subscribe(std::bind(&MainFrame::ReceiveEvents,
         this,
@@ -60,7 +56,7 @@ void MainFrame::Run()
         {
             case wui::window_control::theme:
             {
-                auto nextTheme = wui::get_next_app_theme();
+                auto nextTheme = std::move(wui::get_next_app_theme());
                 wui::error err;
                 wui::set_default_theme_from_name(nextTheme, err);
                 if (!err.is_ok())
@@ -85,7 +81,7 @@ void MainFrame::Run()
         window->update_theme();
     });
 
-    window->init(wui::locale("main_frame", "caption"), { -1, -1, WND_WIDTH + 200, WND_HEIGHT },
+    window->init(wui::locale("main_frame", "caption"), { -1, -1, WND_WIDTH, WND_HEIGHT },
         wui::window_style::frame | wui::window_style::switch_theme_button | wui::window_style::border_all,
         [this]() {});
 

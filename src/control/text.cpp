@@ -227,7 +227,8 @@ void a_text::update_text(graphic* gr, const bool clip__)
     const auto font_ = std::move(theme_font(tcn, tv_font, theme_));
     const auto line_height = font_.size;
     const rect control_pos{ 0, 0, position_.width(), position_.height()};
-    const auto line_space = static_cast<int32_t>(font_ideal_height(font_, nullptr) * space_coeff_);
+
+    const auto line_space = static_cast<int32_t>(font_ideal_height(font_, gr) * space_coeff_);
 
     int32_t line_top{ control_pos.top };
 #ifdef _UI_CHECK
@@ -415,6 +416,12 @@ void a_text::set_position(const rect& position__)
 rect a_text::position() const
 {
     return get_control_position(position_, parent_);
+}
+
+void a_text::move(const int32_t dx, const int32_t dy)
+{
+    position_.move(dx, dy);
+    set_position(position_);
 }
 
 #ifdef _UI_CHECK

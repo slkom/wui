@@ -54,7 +54,10 @@ inline constexpr bool operator&(const window_style l, const window_style r)
 {
     return 0 != (static_cast <uint32_t> (l) & static_cast <uint32_t> (r));
 }
-// используется в window::draw()
+inline constexpr bool operator&&(const window_style  l, const bool r)
+{
+    return static_cast <uint32_t> (l) && r;
+}
 inline constexpr window_style operator~(const window_style v)
 {
     return static_cast <window_style> (~(static_cast <uint32_t> (v)));

@@ -29,7 +29,10 @@ namespace wui
 class primitive_container
 {
 public:
-    primitive_container(wui::system_context &context_);
+    primitive_container(system_context& context__)
+        : context_(context__)
+    {}
+
     ~primitive_container();
 
     void init();

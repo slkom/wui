@@ -33,7 +33,7 @@ public:
     virtual void delete_value(std::string_view section, std::string_view entry) = 0;
 
     virtual void delete_key(std::string_view section) = 0;
-       
+
     virtual error get_error() const = 0;
 
     virtual ~i_config() {}

@@ -29,7 +29,6 @@ message::message(std::shared_ptr<wui::window> transient_window__,
     std::shared_ptr<i_theme> theme__)
     : icon_(message_icon::information),
     button_(message_button::ok),
-    result_callback(),
     transient_window_(transient_window__),
     theme_(theme__),
     window_(std::make_shared<window>(window::tc, theme_)),

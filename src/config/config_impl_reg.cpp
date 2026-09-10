@@ -38,8 +38,8 @@ int32_t config_impl_reg::get_int(std::string_view section, std::string_view entr
     strKey.push_back('\\');
     strKey.append(section);
 
-    std::wstring wKey = boost::nowide::widen(strKey);
-    std::wstring wEntry = boost::nowide::widen(std::string(entry));
+    std::wstring wKey = std::move(boost::nowide::widen(strKey));
+    std::wstring wEntry = std::move(boost::nowide::widen(std::string(entry)));
 
     HKEY hKey = nullptr;
     LSTATUS status = RegOpenKeyExW(
@@ -83,8 +83,8 @@ void config_impl_reg::set_int(std::string_view section, std::string_view entry, 
     strKey.push_back('\\');
     strKey.append(section);
 
-    std::wstring wKey = boost::nowide::widen(strKey);
-    std::wstring wEntry = boost::nowide::widen(std::string(entry));
+    std::wstring wKey = std::move(boost::nowide::widen(strKey));
+    std::wstring wEntry = std::move(boost::nowide::widen(std::string(entry)));
 
     HKEY hKey = nullptr;
     DWORD disposition = 0;
@@ -126,8 +126,8 @@ int64_t config_impl_reg::get_int64(std::string_view section, std::string_view en
     strKey.push_back('\\');
     strKey.append(section);
 
-    std::wstring wKey = boost::nowide::widen(strKey);
-    std::wstring wEntry = boost::nowide::widen(std::string(entry));
+    std::wstring wKey = std::move(boost::nowide::widen(strKey));
+    std::wstring wEntry = std::move(boost::nowide::widen(std::string(entry)));
 
     HKEY hKey = nullptr;
     LSTATUS status = RegOpenKeyExW(
@@ -171,8 +171,8 @@ void config_impl_reg::set_int64(std::string_view section, std::string_view entry
     strKey.push_back('\\');
     strKey.append(section);
 
-    std::wstring wKey = boost::nowide::widen(strKey);
-    std::wstring wEntry = boost::nowide::widen(std::string(entry));
+    std::wstring wKey = std::move(boost::nowide::widen(strKey));
+    std::wstring wEntry = std::move(boost::nowide::widen(std::string(entry)));
 
     HKEY hKey = nullptr;
     DWORD disposition = 0;
@@ -204,9 +204,7 @@ void config_impl_reg::set_int64(std::string_view section, std::string_view entry
     }
 }
 
-std::string config_impl_reg::get_string(std::string_view section,
-    std::string_view entry,
-    std::string_view default_)
+std::string config_impl_reg::get_string(std::string_view section, std::string_view entry, std::string_view default_)
 {
     std::string strKey = base_application_key;
     strKey.push_back('\\');
@@ -214,8 +212,8 @@ std::string config_impl_reg::get_string(std::string_view section,
 
     std::string out(default_.begin(), default_.end());
 
-    std::wstring wKey = boost::nowide::widen(strKey);
-    std::wstring wEntry = boost::nowide::widen(std::string(entry));
+    std::wstring wKey = std::move(boost::nowide::widen(strKey));
+    std::wstring wEntry = std::move(boost::nowide::widen(std::string(entry)));
 
     HKEY  hKey = nullptr;
     DWORD disposition = 0;
@@ -302,9 +300,9 @@ void config_impl_reg::set_string(std::string_view section,
     strKey.push_back('\\');
     strKey.append(section);
 
-    std::wstring wKey = boost::nowide::widen(strKey);
-    std::wstring wEntry = boost::nowide::widen(std::string(entry));
-    std::wstring wValue = boost::nowide::widen(std::string(value));
+    std::wstring wKey = std::move(boost::nowide::widen(strKey));
+    std::wstring wEntry = std::move(boost::nowide::widen(std::string(entry)));
+    std::wstring wValue = std::move(boost::nowide::widen(std::string(value)));
 
     HKEY  hKey = nullptr;
     DWORD disposition = 0;
@@ -349,8 +347,8 @@ void config_impl_reg::delete_value(std::string_view section,
     strKey.push_back('\\');
     strKey.append(section);
 
-    std::wstring wKey = boost::nowide::widen(strKey);
-    std::wstring wEntry = boost::nowide::widen(std::string(entry));
+    std::wstring wKey = std::move(boost::nowide::widen(strKey));
+    std::wstring wEntry = std::move(boost::nowide::widen(std::string(entry)));
 
     HKEY  hKey = nullptr;
     DWORD disposition = 0;
@@ -376,8 +374,8 @@ void config_impl_reg::delete_value(std::string_view section,
 
 void config_impl_reg::delete_key(std::string_view section)
 {
-    std::wstring wBaseKey = boost::nowide::widen(base_application_key);
-    std::wstring wSection = boost::nowide::widen(std::string(section));
+    std::wstring wBaseKey = std::move(boost::nowide::widen(base_application_key));
+    std::wstring wSection = std::move(boost::nowide::widen(std::string(section)));
 
     HKEY  hKey = nullptr;
     DWORD disposition = 0;

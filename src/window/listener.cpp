@@ -13,7 +13,7 @@
 namespace wui
 {
 #if __linux__
-
+//https://evgenykislov.com/cpp-styleguide/cpp-styleguide-archive/cpp-styleguide-012023/
 listener::~listener()
 {
     stop();
@@ -153,8 +153,8 @@ void listener::process_events()
             {
                 w.created = true;
                 event ev;
-                ev.type = event_type::internal;
-                ev.internal_event_.type = internal_event_type::window_created;
+                ev.type = wui::event_type::internal;
+                ev.internal_event_.type = wui::internal_event_type::window_created;
                 w.window_->receive_control_events(ev);
             }
             w.window_->process_events(*e);

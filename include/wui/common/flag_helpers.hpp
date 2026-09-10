@@ -14,7 +14,7 @@ namespace wui
 {
 
 template <typename T>
-[[deprecated("Use `|` [AND] for enum (powers of two) class WUI.")]]
+[[deprecated("Use `&` [AND] for enum (powers of two) class WUI.")]]
 constexpr inline bool flag_is_set(T value, T flag)
 {
     return ((static_cast<uint32_t>(value)) & (static_cast<uint32_t>(flag)));

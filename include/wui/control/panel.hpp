@@ -31,6 +31,9 @@ public:
 
     virtual void set_position(const rect& position) override;
     [[nodiscard]] virtual rect position() const override;
+    virtual void move(const int32_t dx, const int32_t dy) override;
+
+    void add_control(std::shared_ptr<i_control> control);
 
     virtual void set_parent(std::shared_ptr<window> window_) override;
     [[nodiscard]] virtual std::weak_ptr<window> parent() const override;
@@ -70,6 +73,8 @@ private:
     std::shared_ptr<i_theme> theme_;
 
     rect position_;
+
+    std::vector<std::shared_ptr<i_control>> controls;
 
     std::weak_ptr<window> parent_;
 

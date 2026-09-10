@@ -49,6 +49,8 @@ static const uint8_t vk_right = 0x27;
 static const uint8_t vk_nright = 0x66;
 
 /// The modifier keys
+// TODO: модификаторы могут быть нажаты одновременно,
+// нужны бинарные флаги
 static const uint8_t vk_capital = 0x14;
 static const uint8_t vk_lshift = 0x10;
 static const uint8_t vk_rshift = 0x11;
@@ -85,6 +87,8 @@ static const uint8_t vk_right = 0x72;
 static const uint8_t vk_nright = 0x55;
 
 /// The modifier keys
+// TODO: модификаторы могут быть нажаты одновременно,
+// нужны бинарные флаги
 static const uint8_t vk_capital = 0x02;
 static const uint8_t vk_lshift = 0x32;
 static const uint8_t vk_rshift = 0x3E;

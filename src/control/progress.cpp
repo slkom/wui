@@ -27,14 +27,11 @@ progress::progress(int32_t from_, int32_t to_, int32_t value_, orientation orien
     : tcn(theme_control_name),
     theme_(theme__),
     position_{ 0 },
-    parent_(),
-    my_control_sid(),
     showed_(true), topmost_(false),
     from(from_),
     to(to_),
     value(value_),
     orientation_(orientation__),
-    click_callback(),
     has_min_point(false),
     has_max_point(false),
     min_point(0),
@@ -181,6 +178,11 @@ void progress::set_position(const rect& position__)
 rect progress::position() const
 {
     return get_control_position(position_, parent_);
+}
+
+void progress::move(const int32_t dx, const int32_t dy)
+{
+    position_.move(dx, dy);
 }
 
 void progress::set_parent(std::shared_ptr<window> window)

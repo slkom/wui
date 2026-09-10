@@ -38,7 +38,7 @@ std::string real_path(std::string_view relative_path)
 
         if (nullptr != homedir)
         {
-            std::string new_path(relative_path.begin(), relative_path.end());
+            std::string new_path{ relative_path.begin(), relative_path.end() };
 
             new_path.replace(index, 1, homedir);
             return std::move(new_path);

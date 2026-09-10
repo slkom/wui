@@ -68,8 +68,8 @@ rect get_screen_size(system_context &context)
     MONITORINFO mi = { sizeof(mi) };
     if (GetMonitorInfo(MonitorFromWindow(context.hwnd, MONITOR_DEFAULTTOPRIMARY), &mi))
     {
-        auto width = mi.rcMonitor.right - mi.rcMonitor.left;
-        auto height = mi.rcMonitor.bottom - mi.rcMonitor.top;
+        const auto width = mi.rcMonitor.right - mi.rcMonitor.left;
+        const auto height = mi.rcMonitor.bottom - mi.rcMonitor.top;
 
         return { 0, 0, width, height };
     }

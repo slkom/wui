@@ -26,7 +26,6 @@ scroll::scroll(int32_t area_, int32_t scroll_pos_,
     : tcn(theme_control_name),
     theme_(theme__),
     position_{ 0 },
-    parent_(),
     showed_(true), enabled_(true), topmost_(false),
     area(area_),
     scroll_pos(static_cast<double>(scroll_pos_)),
@@ -35,7 +34,6 @@ scroll::scroll(int32_t area_, int32_t scroll_pos_,
     orientation_(orientation__),
     callback(callback_),
     worker_action_(worker_action::undefined),
-    worker(),
     worker_started(false),
     worker_done(true),
     progress(0),
@@ -110,6 +108,12 @@ void scroll::set_position(const rect& position__)
 rect scroll::position() const
 {
     return get_control_position(position_, parent_);
+}
+
+void scroll::move(const int32_t dx, const int32_t dy)
+{
+    position_.move(dx, dy);
+    set_position(position_);
 }
 
 void scroll::set_parent(std::shared_ptr<window> window)
@@ -306,7 +310,6 @@ void scroll::receive_control_events(const event& ev)
                 {
                     while (ev.mouse_event_.y < slider_rect.top && scroll_up())
                     {
-                        //scroll_up();
                         calc_scrollbar_params(&bar_rect, &up_button_rect, &down_button_rect, &slider_rect);
                     }
                 }
@@ -314,7 +317,6 @@ void scroll::receive_control_events(const event& ev)
                 {
                     while (ev.mouse_event_.y > slider_rect.bottom && scroll_down())
                     {
-                        //scroll_down();
                         calc_scrollbar_params(&bar_rect, &up_button_rect, &down_button_rect, &slider_rect);
                     }
                 }
@@ -322,7 +324,6 @@ void scroll::receive_control_events(const event& ev)
                 {
                     while (ev.mouse_event_.x < slider_rect.left && scroll_up())
                     {
-                        //scroll_up();
                         calc_scrollbar_params(&bar_rect, &up_button_rect, &down_button_rect, &slider_rect);
                     }
                 }
@@ -330,7 +331,6 @@ void scroll::receive_control_events(const event& ev)
                 {
                     while (ev.mouse_event_.x > slider_rect.right && scroll_down())
                     {
-                        //scroll_down();
                         calc_scrollbar_params(&bar_rect, &up_button_rect, &down_button_rect, &slider_rect);
                     }
                 }
@@ -496,8 +496,7 @@ void scroll::move_slider(const int32_t v)
     const double delta = v - slider_click_pos;
     slider_click_pos = v;
 
-    //scroll_pos += delta * scroll_interval;
-    scroll_pos = scroll_pos + delta * scroll_interval; // atomic
+    scroll_pos = scroll_pos + delta * scroll_interval; // std::atomic
 
     if (scroll_pos < 0)
     {
@@ -774,14 +773,12 @@ void scroll::redraw()
     auto parent__ = parent_.lock();
     if (parent__)
     {
-        // redraw() происходит не в главном потоке - проблемы? не наблюдались с atom
         auto control_pos = position();
         if (orientation_ == orientation::vertical)
             parent__->redraw({ control_pos.right - progress, control_pos.top, control_pos.right, control_pos.bottom });
         else
             parent__->redraw({ control_pos.left, control_pos.bottom - progress, control_pos.right, control_pos.bottom });
     }
-
 }
 
 void scroll::work()
