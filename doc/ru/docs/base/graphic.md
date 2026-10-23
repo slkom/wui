@@ -11,30 +11,30 @@
 		graphic(system_context &context);
 		~graphic();
 
-		void init(const rect &max_size, color background_color);
+		void init(const rect max_size, color background_color);
 		void release();
 
 		void set_background_color(color background_color);
 
-		void clear(const rect &position);
+		void clear(const rect position);
 
-		void flush(const rect &updated_size);
+		void flush(const rect updated_size);
 
-		void draw_pixel(const rect &position, color color_);
+		void draw_pixel(const rect position, color color_);
 
-		void draw_line(const rect &position, color color_, uint32_t width = 1);
+		void draw_line(const rect position, color color_, uint32_t width = 1);
 
 		rect measure_text(const std::string &text, const font &font_);
-		void draw_text(const rect &position, const std::string &text, color color_, const font &font_);
+		void draw_text(const rect position, const std::string &text, color color_, const font &font_);
 
-		void draw_rect(const rect &position, color fill_color);
-		void draw_rect(const rect &position, color border_color, color fill_color, uint32_t border_width, uint32_t round);
+		void draw_rect(const rect position, color fill_color);
+		void draw_rect(const rect position, color border_color, color fill_color, uint32_t border_width, uint32_t round);
 
 		/// draw some buffer on context
-		void draw_buffer(const rect &position, uint8_t *buffer, size_t buffer_size);
+		void draw_buffer(const rect position, uint8_t *buffer, size_t buffer_size);
 
 		/// draw another graphic on context
-		void draw_graphic(const rect &position, graphic &graphic_, int32_t left_shift, int32_t right_shift);
+		void draw_graphic(const rect position, graphic &graphic_, int32_t left_shift, int32_t right_shift);
 	};
 
 ## constructor

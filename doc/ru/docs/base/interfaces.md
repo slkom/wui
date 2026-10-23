@@ -9,13 +9,13 @@
 	class i_window
 	{
 	public:
-		virtual bool init(const std::string &caption, const rect &position, window_style style, std::function<void(void)> close_callback) = 0;
+		virtual bool init(const std::string &caption, const rect position, window_style style, std::function<void(void)> close_callback) = 0;
 		virtual void destroy() = 0;
 
-		virtual void add_control(std::shared_ptr<i_control> control, const rect &position) = 0;
+		virtual void add_control(std::shared_ptr<i_control> control, const rect position) = 0;
 		virtual void remove_control(std::shared_ptr<i_control> control) = 0;
 
-		virtual void redraw(const rect &position, bool clear = false) = 0;
+		virtual void redraw(const rect position, bool clear = false) = 0;
 
 		virtual std::string subscribe(std::function<void(const event&)> receive_callback, event_type event_types, std::shared_ptr<i_control> control = nullptr) = 0;
 		virtual void unsubscribe(const std::string &subscriber_id) = 0;
@@ -27,7 +27,7 @@
 
 	};
 
-## bool init(const std::string &caption, const rect &position, window_style style, std::function<void(void)> close_callback)
+## bool init(const std::string &caption, const rect position, window_style style, std::function<void(void)> close_callback)
 Первоначальное создание окна. Данный метод должен быть вызван для создания отдельного (базового) окна, а также может использоваться для установки параметров дочернего окна.
 
 - caption - заголовок окна
@@ -40,7 +40,7 @@
 ## void destroy()
 Вызывается когда окно нужно уничтожить
 
-## void add_control(std::shared_ptr<i_control> control, const rect &position)
+## void add_control(std::shared_ptr<i_control> control, const rect position)
 Добавляет на окно дочерний контрол (в том числе дочернее окно)
 
 - control - указатель на добавляемый контрол
@@ -51,7 +51,7 @@
 
 - control - указатель на удаляемый контрол
 
-## void redraw(const rect &position, bool clear = false)
+## void redraw(const rect position, bool clear = false)
 Запускает перерисовку части окна с имеющимися на данном участке контролами.
 
 - position - границы перерисовываемой области
@@ -79,9 +79,9 @@
 	class i_control
 	{
 	public:
-		virtual void draw(graphic &gr, const rect &paint_rect) = 0;
+		virtual void draw(graphic &gr, const rect paint_rect) = 0;
 
-		virtual void set_position(const rect &position, bool redraw = true) = 0;
+		virtual void set_position(const rect position, bool redraw = true) = 0;
 		virtual rect position() const = 0;
 
 		virtual void set_parent(std::shared_ptr<window> window_) = 0;
@@ -110,13 +110,13 @@
 
 	};
 
-## void draw(graphic &gr, const rect &paint_rect)
+## void draw(graphic &gr, const rect paint_rect)
 Метод вызывается окном при необходимости перерисовать контрол (например при вызове window::redraw)
 
 - gr - ссылка на графический контекст окна, на котором контрол должен себя нарисовать
 - paint_rect - область которая должна быть перерисована. Обычно игнорируется простыми контролами
 
-## void set_position(const rect &position, bool redraw = true)
+## void set_position(const rect position, bool redraw = true)
 Мeтод для изменения положения контрола на окне. Координаты передаются в этот метод относительно родительского окна контрола.
 
 - position - новое положение контрола

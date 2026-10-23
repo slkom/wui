@@ -46,12 +46,12 @@
 	{
 		int32_t left, top, right, bottom;
 
-		inline bool operator==(const rect &lv);
-        inline bool operator>(const rect &lv);
-        inline rect operator+(const rect &lv);
+		inline bool operator==(const rect lv);
+        inline bool operator>(const rect lv);
+        inline rect operator+(const rect lv);
 
 		inline bool in(int32_t x, int32_t y) const;
-		inline bool in(const rect &outer) const;
+		inline bool in(const rect outer) const;
 
 		inline bool is_null() const;
 
@@ -65,7 +65,7 @@
 - ```left, top, right, bottom``` - координаты, относительно верхнего левого угла окна
 - ```operator==, operator>, operator+``` - операторы
 - ```in(int32_t x, int32_t y)``` - определяет входит ли точка в область координат
-- ```in(const rect &outer)``` - определяет входят ли координаты в область координат outer
+- ```in(const rect outer)``` - определяет входят ли координаты в область координат outer
 - ```is_null()``` - определяет заданы ли координаты (true если все равны null)
 - ```width(), height()``` - ширина и высота
 - ```move(int32_t x, int32_t y)``` - смещает координаты на x и y

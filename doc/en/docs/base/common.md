@@ -46,12 +46,12 @@ Structure, to transfer coordinates and simplify work with them
 	{
 		int32_t left, top, right, bottom;
 
-		inline bool operator==(const rect &lv);
-        inline bool operator>(const rect &lv);
-        inline rect operator+(const rect &lv);
+		inline bool operator==(const rect lv);
+        inline bool operator>(const rect lv);
+        inline rect operator+(const rect lv);
 
 		inline bool in(int32_t x, int32_t y) const;
-		inline bool in(const rect &outer) const;
+		inline bool in(const rect outer) const;
 
 		inline bool is_null() const;
 
@@ -65,7 +65,7 @@ Structure, to transfer coordinates and simplify work with them
 - ```left, top, right, bottom`` - coordinates relative to the upper left corner of the window
 - ```operator==, operator>, operator+``` - operators
 - ```in(int32_t x, int32_t y)``` - determines whether a point is included in the coordinate area or not.
-- ```in(const rect &outer)`` - determines whether the coordinates are included in the outer coordinate area
+- ```in(const rect outer)`` - determines whether the coordinates are included in the outer coordinate area
 - ```is_null()``` - determines if the coordinates are set (true if all are null)
 - ```width(), height()``` - width and height
 - ```move(int32_t x, int32_t y)``` - shifts coordinates by x and y

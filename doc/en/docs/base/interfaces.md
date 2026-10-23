@@ -9,16 +9,16 @@ This interface is implemented by the window
 	class i_window
 	{
 	public:
-    	virtual bool init(const std::string &caption, const rect &position, window_style style, std::function<void(void)> close_callback) = 0;
+    	virtual bool init(const std::string &caption, const rect position, window_style style, std::function<void(void)> close_callback) = 0;
     	virtual void destroy() = 0;
 
-    	virtual void add_control(std::shared_ptr<i_control> control, const rect &position) = 0;
+    	virtual void add_control(std::shared_ptr<i_control> control, const rect position) = 0;
     	virtual void remove_control(std::shared_ptr<i_control> control) = 0;
     
     	virtual void bring_to_front(std::shared_ptr<i_control> control) = 0;
     	virtual void move_to_back(std::shared_ptr<i_control> control) = 0;
 
-    	virtual void redraw(const rect &position, bool clear = false) = 0;
+    	virtual void redraw(const rect position, bool clear = false) = 0;
 
     	virtual std::string subscribe(std::function<void(const event&)> receive_callback, event_type event_types, std::shared_ptr<i_control> control = nullptr) = 0;
     	virtual void unsubscribe(const std::string &subscriber_id) = 0;
@@ -79,9 +79,9 @@ This interface must be implemented by all controls, as well as window, because i
 	class i_control
 	{
 	public:
-    	virtual void draw(graphic &gr, const rect &paint_rect) = 0;
+    	virtual void draw(graphic &gr, const rect paint_rect) = 0;
 
-    	virtual void set_position(const rect &position, bool redraw = true) = 0;
+    	virtual void set_position(const rect position, bool redraw = true) = 0;
     	virtual rect position() const = 0;
 
     	virtual void set_parent(std::shared_ptr<window> window_) = 0;

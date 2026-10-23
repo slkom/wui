@@ -58,12 +58,12 @@ To make it a little clearer how the system is built, we suggest to consider the 
 
 Creating / destroying a window
 
-    bool init(const std::string &caption, const rect &position, window_style style, std::function<void(void)> close_callback);
+    bool init(const std::string &caption, const rect position, window_style style, std::function<void(void)> close_callback);
     void destroy();
 
 Redraws a part of the window with the controls present in this area. This method is called by a control when it needs to redraw itself. In response, the window calls draw() of the control with the prepared graphic (drawing context).
 
-    void redraw(const rect &position, bool clear = false);
+    void redraw(const rect position, bool clear = false);
 
 Methods for subscribing to events that the window receives. Events can be from the system, internal or from the application.
 
@@ -84,11 +84,11 @@ A reference to a structure containing platform-dependent entities. For example H
 
 Each control must implement at least these methods. Also the window, being a control itself, must implement them.
 
-Method where the control must draw itself. Called only by the window when the control needs to redraw itself. If the control needs to redraw itself, it must call redraw() of its parent window.void draw(graphic &gr, const rect &paint_rect);
+Method where the control must draw itself. Called only by the window when the control needs to redraw itself. If the control needs to redraw itself, it must call redraw() of its parent window.void draw(graphic &gr, const rect paint_rect);
 
 Custom method for changing the position of the control on the window. The coordinates are specified in pixels relative to the top left corner of the parent window.
 
-    void set_position(const rect &position, bool redraw = true);
+    void set_position(const rect position, bool redraw = true);
 
 User-defined method, returns the position of the control relative to the windowrect position() const;
 
@@ -141,21 +141,21 @@ Each window has its own graphic for drawing its controls. But nobody prevents yo
 
 Initialization/deinitialization methods
 
-    void init(const rect &max_size, color background_color);void release();
+    void init(const rect max_size, color background_color);void release();
 
 Sets the background color, this color will be used to fill the canvas when clear() is called.
     
     void set_background_color(color background_color);
-    void clear(const rect &position);
+    void clear(const rect position);
 
 Resetting (drawing) the area to the system graphic context
 
-    void flush(const rect &updated_size);
+    void flush(const rect updated_size);
 
 Draw a point, line
 
-    void draw_pixel(const rect &position, color color_);
-    void draw_line(const rect &position, color color_, uint32_t width = 1);
+    void draw_pixel(const rect position, color color_);
+    void draw_line(const rect position, color color_, uint32_t width = 1);
 
 Measure the size of the text with the selected font
     
@@ -163,23 +163,23 @@ Measure the size of the text with the selected font
 
 Write the text with the selected font
     
-    void draw_text(const rect &position, const std::string &text, color color_, const font &font_);
+    void draw_text(const rect position, const std::string &text, color color_, const font &font_);
 
 Draw a simple rectangle
 
-    void draw_rect(const rect &position, color fill_color);
+    void draw_rect(const rect position, color fill_color);
 
 Draw a rectangle with rounded edges
     
-    void draw_rect(const rect &position, color border_color, color fill_color, uint32_t border_width, uint32_t round);
+    void draw_rect(const rect position, color border_color, color fill_color, uint32_t border_width, uint32_t round);
 
 Draw RGB32 buffer
     
-    void draw_buffer(const rect &position, uint8_t *buffer, size_t buffer_size);
+    void draw_buffer(const rect position, uint8_t *buffer, size_t buffer_size);
 
 Draw the contents of another graphic
     
-    void draw_graphic(const rect &position, graphic &graphic_, int32_t left_shift, int32_t right_shift);
+    void draw_graphic(const rect position, graphic &graphic_, int32_t left_shift, int32_t right_shift);
 
 Access to system DC
 
