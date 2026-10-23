@@ -1,4 +1,4 @@
-file(GLOB SOURCES 
+file(GLOB SOURCES
 	*.cpp
 	ButtonSheet/*.cpp
 	InputSheet/*.cpp
@@ -7,13 +7,9 @@ file(GLOB SOURCES
 
 include_directories(.)
 
-if(NOT CMAKE_DEBUG_POSTFIX)
-	set(CMAKE_DEBUG_POSTFIX "_d")
-endif()
-
 add_executable(demo ${SOURCES})
 
-target_link_libraries(demo
+target_link_libraries(demo PRIVATE wui_sanitizers
 	wui
 	xcb
 	xcb-cursor
@@ -28,8 +24,6 @@ target_link_libraries(demo
 	udev
 )
 
-add_custom_target(copy_demo ALL
-   ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/res ${CMAKE_CURRENT_BINARY_DIR}/res
-   DEPENDS demo
-   COMMENT "Copy ${CMAKE_CURRENT_SOURCE_DIR}/res to ${CMAKE_CURRENT_BINARY_DIR}/res"
-   )
+add_custom_command(TARGET demo POST_BUILD
+	COMMAND ${CMAKE_COMMAND} -E copy_directory
+		"${CMAKE_CURRENT_SOURCE_DIR}/res" "$<TARGET_FILE_DIR:demo>/res")
