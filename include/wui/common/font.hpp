@@ -40,6 +40,22 @@ struct font
     std::string name;
     int32_t size{ 1 };
     decorations decorations_{ decorations::normal };
+
+    bool unamed() const noexcept
+    {
+        return !name.empty();
+    }
+
+    inline bool operator==(const font& lf) const
+    {
+        return lf.size == size && lf.name == name && lf.decorations_ == decorations_;
+    }
+
+    inline bool operator!=(const font& lf) const
+    {
+        return lf.size != size || lf.name != name || lf.decorations_ == decorations_;
+    }
+
 };
 
 }

@@ -14,6 +14,7 @@
 #include <wui/common/rect.hpp>
 #include <wui/common/color.hpp>
 #include <wui/control/list.hpp>
+#include <wui/theme/theme.hpp>
 
 #include <string>
 #include <functional>
@@ -33,7 +34,7 @@ struct select_item
 
     std::string text;
 
-    inline bool operator==(int64_t id_)
+    inline bool operator==(int64_t id_) const noexcept
     {
         return id == id_;
     }
@@ -42,37 +43,38 @@ struct select_item
 class select : public i_control, public std::enable_shared_from_this<select>
 {
 public:
-    select(std::string_view theme_control_name = tc, std::shared_ptr<i_theme> theme_ = nullptr);
-    virtual ~select();
+    explicit select(std::string_view theme_control_name = tc, std::shared_ptr<i_theme> theme_ = nullptr);
+    ~select() override;
 
-    virtual void draw(graphic &gr, const rect&) override;
+    void draw(graphic &gr, const rect) override;
+    void redraw(bool clear = false) override;
 
-    virtual void set_position(const rect& position) override;
-    [[nodiscard]] virtual rect position() const override;
-    virtual void move(const int32_t dx, const int32_t dy) override;
+    void set_position(const rect position) override;
+    [[nodiscard]] rect position() const override;
+    void move(const int32_t dx, const int32_t dy) override;
 
-    virtual void set_parent(std::shared_ptr<window> window_) override;
-    [[nodiscard]] virtual std::weak_ptr<window> parent() const override;
-    virtual void clear_parent();
+    void set_parent(std::shared_ptr<window> window_) override;
+    [[nodiscard]] std::weak_ptr<window> parent() const override;
+    void clear_parent();
 
-    virtual void set_topmost(bool yes) override;
-    [[nodiscard]] virtual bool topmost() const override;
+    void set_topmost(bool yes) override;
+    [[nodiscard]] bool topmost() const override;
 
-    virtual void update_theme_control_name(std::string_view theme_control_name) override;
-    virtual void update_theme(std::shared_ptr<i_theme> theme_ = nullptr) override;
+    void update_theme_control_name(std::string_view theme_control_name) override;
+    void update_theme(std::shared_ptr<i_theme> theme_ = nullptr) override;
 
-    virtual void show() override;
-    virtual void hide() override;
-    [[nodiscard]] virtual bool showed() const override;
+    void show() override;
+    void hide() override;
+    [[nodiscard]] bool showed() const override;
 
-    virtual void enable() override;
-    virtual void disable() override;
+    void enable() override;
+    void disable() override;
     [[nodiscard]] virtual bool enabled() const override;
 
-    [[nodiscard]] virtual bool focused() const override;
-    [[nodiscard]] virtual bool focusing() const override;
+    [[nodiscard]] bool focused() const override;
+    [[nodiscard]] bool focusing() const override;
 
-    [[nodiscard]] virtual error get_error() const override;
+    [[nodiscard]] error get_error() override;
 
     /// Select's interface
     void set_items(const select_items_t &items);
@@ -88,11 +90,24 @@ public:
     [[nodiscard]] const select_items_t &items() const;
 
     void set_change_callback(std::function<void(int32_t /* n_item */, int64_t /* id */)> change_callback) noexcept;
-    [[nodiscard]] int32_t get_font_size() const;
 
-    void redraw();
+    /// возвращает заданный размер шрифта
+    [[nodiscard]] int32_t get_font_size() const
+    {
+        return theme_font(tcn, tv_font, theme_).size;
+    }
 
-public:
+    /// returns recommended distance between the baselines of two adjacent lines of text
+    [[nodiscard]] int32_t font_line_height(int32_t* max_height = nullptr) const
+    {
+        return wui::font_line_height(theme_font(tcn, tv_font, theme_), nullptr, max_height);
+    }
+    /// returns max text height
+    [[nodiscard]] int32_t font_max_height() const
+    {
+        return wui::font_max_height(theme_font(tcn, tv_font, theme_), nullptr);
+    }
+
     /// Control name in theme
     static constexpr const char *tc = "select";
 
@@ -115,6 +130,9 @@ public:
     static constexpr const char *tv_round = "round";
     static constexpr const char *tv_font = "font";
 
+    static constexpr int32_t select_horizontal_indent = 5;
+    static constexpr int32_t item_height__ = 32;
+
 private:
     std::vector<select_item> items_;
 
@@ -123,7 +141,7 @@ private:
     std::string tcn; /// control name in theme
     std::shared_ptr<i_theme> theme_;
 
-    rect position_;
+    rect position_{};
 
     std::weak_ptr<window> parent_;
     std::string my_control_sid, my_plain_sid;
@@ -131,27 +149,27 @@ private:
     std::shared_ptr<i_theme> list_theme;
     std::shared_ptr<list> list_;
 
-    bool showed_, enabled_, active_, topmost_;
-    bool focused_;
-    bool focusing_;
+    bool showed_{ true }, enabled_{ true }, active_{ false }, topmost_{ false };
+    bool focused_{ false };
+    bool focusing_{ true };
 
-    int32_t left_shift;
+    int32_t left_shift{ 0 };
 
-    int32_t item_height_;
+    int32_t item_height_{ item_height__ };
 
     void receive_control_events(const event &ev);
     void receive_plain_events(const event &ev);
 
     void update_list_theme();
 
-    void draw_arrow_down(graphic &gr, const rect &pos);
+    void draw_arrow_down(graphic &gr, const rect pos);
 
     void select_up();
     void select_down();
 
     void show_list();
 
-    void draw_list_item(graphic &gr, const int32_t n_item, const rect &item_rect_, const list::item_state state);
+    void draw_list_item(graphic &gr, const int32_t n_item, const rect item_rect_, const list::item_state state);
     void activate_list_item(const int32_t n_item);
     void change_list_item(const int32_t n_item);
 };

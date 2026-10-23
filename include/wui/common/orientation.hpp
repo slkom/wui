@@ -17,4 +17,12 @@ enum class orientation
     horizontal
 };
 
+enum class direction
+{
+    left,
+    right,
+    up,
+    down
+};
+
 }

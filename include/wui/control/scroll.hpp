@@ -48,38 +48,38 @@ public:
         orientation orientation_ = orientation::vertical,
         std::function<void(scroll_state, int32_t)> callback = nullptr,
         std::string_view theme_control_name = tc, std::shared_ptr<i_theme> theme_ = nullptr);
-    virtual ~scroll();
+    ~scroll() override;
 
-    virtual void draw(graphic &gr, const rect& paint_rect [[maybe_unused]] ) override;
+    void draw(graphic &gr, const rect) override;
+    void redraw(bool clear = false) override;
 
-    virtual void set_position(const rect& position) override;
-    [[nodiscard]] virtual rect position() const override;
-    virtual void move(const int32_t dx, const int32_t dy) override;
+    void set_position(const rect position) override;
+    [[nodiscard]] rect position() const override;
+    void move(const int32_t dx, const int32_t dy) override;
 
-    virtual void set_parent(std::shared_ptr<window> window_) override;
-    [[nodiscard]] virtual std::weak_ptr<window> parent() const override;
-    virtual void clear_parent() override;
+    void set_parent(std::shared_ptr<window> window_) override;
+    [[nodiscard]] std::weak_ptr<window> parent() const override;
+    void clear_parent() override;
 
-    virtual void set_topmost(bool yes) override;
-    [[nodiscard]] virtual bool topmost() const override;
+    void set_topmost(bool yes) override;
+    [[nodiscard]] bool topmost() const override;
 
-    virtual void update_theme_control_name(std::string_view theme_control_name) override;
-    virtual void update_theme(std::shared_ptr<i_theme> theme_ = nullptr) override;
+    void update_theme_control_name(std::string_view theme_control_name) override;
+    void update_theme(std::shared_ptr<i_theme> theme_ = nullptr) override;
 
-    virtual void show() override;
-    virtual void hide() override;
-    [[nodiscard]] virtual bool showed() const override;
+    void show() override;
+    void hide() override;
+    [[nodiscard]] bool showed() const override;
 
-    virtual void enable() override;
-    virtual void disable() override;
-    [[nodiscard]] virtual bool enabled() const override;
+    void enable() override;
+    void disable() override;
+    [[nodiscard]] bool enabled() const override;
 
-    [[nodiscard]] virtual bool focused() const override;
-    [[nodiscard]] virtual bool focusing() const override;
+    [[nodiscard]] bool focused() const override;
+    [[nodiscard]] bool focusing() const override;
 
-    [[nodiscard]] virtual error get_error() const override;
+    [[nodiscard]] error get_error() override;
 
-public:
     /// Scroll's interface
     void set_area(const int32_t area);
     [[nodiscard]] static int32_t get_buttons_size() noexcept; //! full size buttons [TODO: изменить, когда будет масштабирование]
@@ -96,9 +96,6 @@ public:
 
     [[nodiscard]] scroll_view get_scroll_view() const noexcept;
 
-    void redraw();
-
-public:
     /// Control name in theme
     static constexpr const char *tc = "scroll";
 
@@ -114,15 +111,16 @@ private:
     std::string tcn; // control name
     std::shared_ptr<i_theme> theme_;
 
-    rect position_;
+    rect position_{};
 
     std::weak_ptr<window> parent_;
     std::string my_control_sid, my_plain_sid;
 
-    bool showed_, enabled_, topmost_;
+    bool showed_{ true }, enabled_{ true }, topmost_{ false };
+    bool slider_scrolling{ false };
 
-    std::atomic<double> area, scroll_pos, prev_scroll_pos;
-    std::atomic<double> scroll_interval;
+    std::atomic<double> area, scroll_pos, prev_scroll_pos{ -1.0 };
+    std::atomic<double> scroll_interval{ 1.0 };
 
     orientation orientation_;
 
@@ -138,24 +136,24 @@ private:
         scrollbar_show
     };
 
-    worker_action worker_action_;
+    worker_action worker_action_{ worker_action::undefined };
     std::thread worker;
-    std::atomic<bool> worker_started;
-    std::atomic<bool> worker_done;
+    std::atomic<bool> worker_started{ false };
+    std::atomic<bool> worker_done{ true };
 
-    std::atomic<int32_t> progress;
+    std::atomic<int32_t> progress{ 0 };
 
-    scroll_view scroll_view_;
+    scroll_view scroll_view_{ scroll_view::tiny };
 
-    bool slider_scrolling;
-    int32_t slider_click_pos;
+    int32_t slider_click_pos{ 0 };
 
-    int32_t title_height;
+    int32_t title_height{ 0 };
 
-    void draw_arrow_up(graphic& gr, const rect& button_pos);
-    void draw_arrow_left(graphic& gr, const rect& button_pos);
-    void draw_arrow_down(graphic& gr, const rect& button_pos);
-    void draw_arrow_right(graphic& gr, const rect& button_pos);
+    void redraw_progress();
+    void draw_arrow_up(graphic& gr, const rect button_pos);
+    void draw_arrow_left(graphic& gr, const rect button_pos);
+    void draw_arrow_down(graphic& gr, const rect button_pos);
+    void draw_arrow_right(graphic& gr, const rect button_pos);
 
     void calc_scroll_interval();
     void calc_vert_scrollbar_params(rect* bar_rect = nullptr, rect* up_button_rect = nullptr, rect* down_button_rect = nullptr, rect* slider_rect = nullptr);

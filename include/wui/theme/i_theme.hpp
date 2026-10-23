@@ -48,7 +48,7 @@ public:
     virtual void load_file(std::string_view file_name) = 0;
     virtual void load_theme(const i_theme &theme_) = 0;
 
-    [[nodiscard]] virtual error get_error() const = 0;
+    [[nodiscard]] virtual error get_error() = 0;
 
     virtual ~i_theme() {}
 };

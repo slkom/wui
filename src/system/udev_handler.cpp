@@ -36,20 +36,23 @@ udev_handler::~udev_handler()
 
 void udev_handler::start()
 {
-    if (started) return;
+    if (started)
+        return;
 
     started = true;
 
-    thread = std::thread(std::bind(&udev_handler::process, this));
+    thread = std::thread(&udev_handler::process, this);
 }
 
 void udev_handler::stop()
 {
-    if (!started) return;
+    if (!started)
+        return;
 
     started = false;
     write(wake[1], "q", 1);
-    if (thread.joinable()) thread.join();
+    if (thread.joinable())
+        thread.join();
 }
 
 void send_event(device_type dt, system_event_type et, std::function<void(const event &ev)> callback)
@@ -111,9 +114,9 @@ void udev_handler::process()
         fd_set fds; FD_ZERO(&fds);
         FD_SET(fd, &fds);
         FD_SET(wake[0], &fds);
-        
+
         int nfds = (fd > wake[0] ? fd : wake[0]) + 1;
-        int r = select(nfds, &fds, NULL, NULL, NULL);      
+        int r = select(nfds, &fds, NULL, NULL, NULL);
 
         if (FD_ISSET(fd, &fds))
         {

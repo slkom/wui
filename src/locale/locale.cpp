@@ -56,12 +56,12 @@ void set_locale_empty(locale_type type, std::string_view name)
 
 bool set_locale_from_type(locale_type type, error &err)
 {
-    auto locale_params = wui::get_app_locale(type);
+    const auto locale_params = std::move(wui::get_app_locale(type));
 
 #ifdef _WIN32
-    bool ok = wui::set_locale_from_resource(locale_params.type, locale_params.name, locale_params.resource_id, "JSONS");
+    const bool ok = wui::set_locale_from_resource(locale_params.type, locale_params.name, locale_params.resource_id, "JSONS");
 #else
-    bool ok = wui::set_locale_from_file(locale_params.type, locale_params.name, locale_params.file_name);
+    const bool ok = wui::set_locale_from_file(locale_params.type, locale_params.name, locale_params.file_name);
 #endif
 
     err = std::move(instance->get_error());

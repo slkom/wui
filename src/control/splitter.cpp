@@ -17,16 +17,13 @@
 namespace wui
 {
 
- splitter::splitter(orientation orientation__, std::function<void(int32_t , int32_t )> callback_, std::string_view theme_control_name, std::shared_ptr<i_theme> theme__)
+splitter::splitter(orientation orientation__, std::function<void(int32_t , int32_t )> callback_,
+     std::string_view theme_control_name, std::shared_ptr<i_theme> theme__)
     : orientation_(orientation__),
-    callback1(callback_),
-    margin_min(-1), margin_max(-1),
     tcn(theme_control_name),
-    theme_(theme__),
-    position_{ },
-    prev_pos{ },
-    showed_(true), enabled_(true), active(false), topmost_(false)
+    theme_(theme__)
 {
+    set_callback(callback_);
 }
 
 splitter::~splitter()
@@ -38,7 +35,7 @@ splitter::~splitter()
     }
 }
 
-void splitter::draw(graphic& gr, const rect&)
+void splitter::draw(graphic &gr, const rect )
 {
     if (!showed_ || position_.is_null())
     {
@@ -176,7 +173,7 @@ void splitter::receive_plain_events(const event& ev)
     }
 }
 
-void splitter::set_position(const rect& position__)
+void splitter::set_position(const rect position__)
 {
     prev_pos = position_;
     position_ = position__;
@@ -214,7 +211,11 @@ void splitter::clear_parent()
     {
         parent__->unsubscribe(my_control_sid);
         parent__->unsubscribe(my_plain_sid);
+        redraw(true);
     }
+    my_control_sid.clear();
+    my_plain_sid.clear();
+
     parent_.reset();
 }
 
@@ -238,7 +239,7 @@ bool splitter::focusing() const
     return false;
 }
 
-error splitter::get_error() const
+error splitter::get_error()
 {
     return {};
 }
@@ -256,8 +257,6 @@ void splitter::update_theme(std::shared_ptr<i_theme> theme__)
         return;
     }
     theme_ = theme__;
-
-    redraw();
 }
 
 void splitter::show()
@@ -265,7 +264,7 @@ void splitter::show()
     if (!showed_)
     {
         showed_ = true;
-        redraw();
+        redraw(true);
     }
 }
 
@@ -273,8 +272,9 @@ void splitter::hide()
 {
     if (showed_)
     {
+        if (position_.is_hide())
+            return;
         showed_ = false;
-
         auto parent__ = parent_.lock();
         if (parent__)
         {
@@ -310,19 +310,19 @@ void splitter::set_callback(std::function<void(int32_t, int32_t )> callback_)
     callback1 = callback_;
     if (callback_)
     {
-        callback = [this](const rect& pos, const rect& prev_pos)
+        callback = [this](const rect pos, const rect prev_pos)
             {
                 callback1(pos.left, pos.top);
             };
     }
     else
     {
-        callback1 = nullptr;
+        callback = nullptr;
     }
 
 }
 
-void splitter::set_callback_ex(std::function<void(const rect& pos, const rect& prev_pos)> callback_)
+void splitter::set_callback_ex(std::function<void(const rect pos, const rect prev_pos)> callback_)
 {
     callback1 = nullptr;
     callback = callback_;
@@ -334,14 +334,14 @@ void splitter::set_margins(int32_t min_, int32_t max_)
     margin_max = max_;
 }
 
-void splitter::redraw()
+void splitter::redraw(bool clear)
 {
     if (showed_)
     {
         auto parent__ = parent_.lock();
         if (parent__)
         {
-            parent__->redraw(position());
+            parent__->redraw(position(), clear);
         }
     }
 }

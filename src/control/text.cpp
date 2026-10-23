@@ -71,14 +71,9 @@ text_ex::~text_ex()
     }
 }
 
-int32_t a_text::get_font_size() const
-{
-    return theme_font(tcn, tv_font, theme_).size;
-}
-
 void a_text::set_space_coeff(const double val) noexcept
 {
-    space_coeff_ = (val >= 0.6 ? val : 0.6);
+    space_coeff_ = (val > 1.0 ? val : 1.0);
 }
 
 double a_text::get_space_coeff() const noexcept
@@ -118,9 +113,9 @@ void a_text::make_lines(const std::string_view text, std::vector<std::string> &l
     }
 }
 
-int32_t text::font_ideal_height(const font& font_, graphic* gr)
+int32_t text::font_line_height_internal(const font& font_, graphic* gr, int32_t* max_height)
 {
-    return get_font_ideal_height(font_, gr);
+    return wui::font_line_height(font_, gr, max_height);
 }
 
 int32_t text::measure_text_line(const std::string &text__, const font& font__)
@@ -128,12 +123,15 @@ int32_t text::measure_text_line(const std::string &text__, const font& font__)
     return measure_text(text__, font__).width();
 }
 
-int32_t text_ex::font_ideal_height(const font& font_, graphic* gr)
+int32_t text_ex::font_line_height_internal(const font& font_, graphic* gr, int32_t* max_height)
 {
 #ifdef _WIN32
-    return get_font_ideal_height_gdiplus(font_, gr);
+    const auto ls = wui::font_line_height_gdiplus(font_, gr);
+    if (max_height)
+        *max_height = ls;
+    return ls;
 #else
-    return get_font_ideal_height(font_, gr);
+    return wui::font_line_height(font_, gr, max_height);
 #endif
 }
 
@@ -170,27 +168,19 @@ rect a_text::get_preferred_size()
             width_max = width;
         }
     }
-    const auto line_height = font_.size;
-    const auto line_space = static_cast<int32_t>(font_ideal_height(font_, nullptr) * space_coeff_);
-    const int32_t height_max = line_height + static_cast<int32_t>((lines.size() - 1)) * line_space;
-    return rect{ 0, 0, width_max, height_max };
+    int32_t font_max_height;
+    const auto line_height = font_line_height_internal(font_, nullptr, &font_max_height);
+    const auto height = font_max_height + static_cast<int32_t>((lines.size() - 1) * line_height * space_coeff_);
+    return rect{ 0, 0, width_max, height };
 }
 
-int32_t text::truncate_and_measure_text
-(
-    std::string& text__, const font& font__, const int32_t width__,
-    graphic* gr
-)
+int32_t text::truncate_and_measure_text(std::string& text__, const font& font__, const int32_t width__, graphic* gr)
 {
     truncate_line(text__, gr, font__, width__);
     return measure_text(text__, font__, gr).width();
 }
 
-int32_t text_ex::truncate_and_measure_text
-(
-    std::string& text__, const font& font__, const int32_t width__,
-    graphic* gr
-)
+int32_t text_ex::truncate_and_measure_text(std::string& text__, const font& font__, const int32_t width__, graphic* gr)
 {
 #ifdef _WIN32
     truncate_line_gdiplus(text__, gr, font__, width__);
@@ -225,10 +215,10 @@ void a_text::update_text(graphic* gr, const bool clip__)
     }
 
     const auto font_ = std::move(theme_font(tcn, tv_font, theme_));
-    const auto line_height = font_.size;
-    const rect control_pos{ 0, 0, position_.width(), position_.height()};
 
-    const auto line_space = static_cast<int32_t>(font_ideal_height(font_, gr) * space_coeff_);
+    int32_t max_height;
+    const auto line_height = font_line_height_internal(font_, gr, &max_height);
+    const rect control_pos{ 0, 0, position_.width(), position_.height()};
 
     int32_t line_top{ control_pos.top };
 #ifdef _UI_CHECK
@@ -241,8 +231,8 @@ void a_text::update_text(graphic* gr, const bool clip__)
             break;
         case vert_alignment::center:
         {
-            auto t = static_cast<int32_t>((control_pos.height()
-                - line_height - (tls.size() - 1) * line_space) / 2);
+            auto t = (control_pos.height() - max_height
+                - static_cast<int32_t>(line_height * space_coeff_ * (tls.size() - 1))) / 2;
             if (t < 0) t = 0;
             line_top += t;
 #ifdef _UI_CHECK
@@ -252,7 +242,7 @@ void a_text::update_text(graphic* gr, const bool clip__)
         break;
         case vert_alignment::bottom:
         {
-            auto t = static_cast<int32_t>(line_height * (1 + (tls.size() - 1) * space_coeff_));
+            auto t = max_height + static_cast<int32_t>(line_height * space_coeff_ * (tls.size() - 1));
             if (t > control_pos.height()) t = control_pos.height();
             line_top = control_pos.bottom - t;
 #ifdef _UI_CHECK
@@ -266,10 +256,10 @@ void a_text::update_text(graphic* gr, const bool clip__)
     const auto line_top_shift = line_top - line_height;
     int32_t line_top_prev{ }, width_max{ }, tmp_left{ position_.right };
 #endif
+    const auto line_space = static_cast<int32_t>(line_height * space_coeff_);
     for (auto& str : tls)
     {
-        const int32_t width =
-            truncate_and_measure_text(str, font_, control_pos.width(), gr);
+        const int32_t width = truncate_and_measure_text(str, font_, control_pos.width(), gr);
 
         int32_t left = control_pos.left;
         switch (hori_alignment_)
@@ -336,19 +326,7 @@ void a_text::update_text(graphic* gr, const bool clip__)
 void text::draw_text(graphic& gr)
 {
     const auto font_ = std::move(theme_font(tcn, tv_font, theme_));
-    const auto color_ = theme_color(tcn, tv_color, theme_);
-    //if(clip_)
-    //{
-        // предпочтительнее для разных языков?
-        gr.draw_text_clip_rgb(position(), lines_, color_, font_, clip_);
-    //}
-    //else
-    //{
-    //    for (auto& line : lines_)
-    //    {
-    //        gr.draw_text(line.rect, line.str, color_, font_);
-    //    }
-    //}
+    gr.draw_text_clip_rgb(position(), lines_, theme_color(tcn, tv_color, theme_), font_, clip_);
 }
 
 void text_ex::draw_text(graphic& gr)
@@ -357,7 +335,7 @@ void text_ex::draw_text(graphic& gr)
     gr.draw_text_clip(position(), lines_, theme_color(tcn, tv_color, theme_), font_, clip_);
 }
 
-void a_text::draw(graphic& gr, const rect&)
+void a_text::draw(graphic& gr, const rect)
 {
     if (update_)
     {
@@ -382,7 +360,6 @@ void a_text::draw(graphic& gr, const rect&)
         const rect r2 = position_text();
 
         // test: FillRect > DrawRoundBox
-        //gr.draw_rect(r2, make_color(255, 0, 0));
 
         gr.draw_rect(r2,
             make_color(0, 100, 255),
@@ -397,16 +374,17 @@ void a_text::draw(graphic& gr, const rect&)
     draw_text(gr);
 }
 
-void a_text::set_position(const rect& position__)
+void a_text::set_position(const rect position__)
 {
     position_ = position__;
 
     if (!clip_)
     {
-        const auto font_size = theme_font(tcn, tv_font, theme_).size;
-        if (position__.height() < font_size)
+        int32_t font_max_height;
+        font_line_height_internal(theme_font(tcn, tv_font, theme_), nullptr, &font_max_height);
+        if (position__.height() < font_max_height)
         {
-            position_.bottom = position_.top + font_size;
+            position_.bottom = position_.top + font_max_height;
         }
     }
 
@@ -449,6 +427,7 @@ std::weak_ptr<window> a_text::parent() const
 
 void a_text::clear_parent()
 {
+    redraw(true);
     parent_.reset();
 }
 
@@ -472,7 +451,7 @@ bool a_text::focusing() const
     return false;
 }
 
-error a_text::get_error() const
+error a_text::get_error()
 {
     return {};
 }
@@ -485,13 +464,13 @@ void a_text::update_theme_control_name(std::string_view theme_control_name)
 
 void a_text::update_theme(std::shared_ptr<i_theme> theme__)
 {
-    if (theme_ && !theme__)
+    if ((theme_ && !theme__) // блокируем смену темы на default
+       || theme_ == theme__)
     {
         return;
     }
     theme_ = theme__;
     update_ = true;
-    redraw();
 }
 
 void a_text::show()
@@ -503,6 +482,8 @@ void a_text::show()
 void a_text::hide()
 {
     showed_ = false;
+    if (position_.is_hide())
+        return;
     auto parent__ = parent_.lock();
     if (parent__)
     {
@@ -541,14 +522,14 @@ void a_text::set_alignment(hori_alignment hori_alignment__, vert_alignment vert_
     redraw();
 }
 
-void a_text::redraw()
+void a_text::redraw([[maybe_unused]] bool clear)
 {
     if (showed_)
     {
         auto parent__ = parent_.lock();
         if (parent__)
         {
-            parent__->redraw(position(), true);  // стираем актуальную область текста
+            parent__->redraw(position(), true);
         }
     }
 }

@@ -30,8 +30,8 @@
 #ifdef _WIN32
 int APIENTRY _tWinMain(_In_ HINSTANCE,
     _In_opt_ HINSTANCE,
-    _In_ LPTSTR    lpCmdLine [[maybe_unused]],
-    _In_ int       nCmdShow [[maybe_unused]] )
+    [[maybe_unused]] _In_ LPTSTR lpCmdLine,
+    [[maybe_unused]] _In_ int nCmdShow  )
 #elif __linux__
 int main(int argc, char *argv[])
 #endif
@@ -83,9 +83,5 @@ int main(int argc, char *argv[])
     }
 
     MainFrame mainFrame;
-    mainFrame.Run();
-
-    wui::framework::run();
-
-    return 0;
+    return wui::framework::run([&mainFrame]() -> bool { return mainFrame.Run(); });
 }

@@ -24,8 +24,8 @@ class graphic;
 struct system_context
 {
     HWND hwnd{ NULL };
-
-    bool physical() const noexcept
+    double scale{ 1.0 };
+    [[nodiscard]] bool valid() const noexcept
     {
         return hwnd != NULL;
     }
@@ -34,6 +34,7 @@ struct system_context
     void clear() noexcept
     {
         hwnd = NULL;
+        scale = 1.0;
     }
 
 };
@@ -45,12 +46,13 @@ struct system_context
     Display* display{ nullptr }; // installed in the listener::init()
     xcb_connection_t *connection{ nullptr }; // installed in the listener::init()
 
-    xcb_screen_t *screen{ nullptr }; // installed in the graphic::init()
-    xcb_window_t wnd{ }; // [id] installed in the window::init()
+    xcb_screen_t *screen{ nullptr }; // and installed in the graphic::init()
+    xcb_window_t wnd{ XCB_WINDOW_NONE }; // [id] installed in the window::init()
+    double scale{ 1.0 };
 
-    [[nodiscard]] bool physical() const noexcept
+    [[nodiscard]] bool valid() const noexcept
     {
-        return display != nullptr;
+        return screen != nullptr; // xcb
     }
 
     void clear()
@@ -58,7 +60,8 @@ struct system_context
         display = nullptr;
         connection = nullptr;
         screen = nullptr;
-        wnd = 0;
+        wnd = XCB_WINDOW_NONE;
+        scale = 1.0;
     }
 };
 

@@ -30,19 +30,34 @@ struct rect
     /// </summary>
     /// <param name="lr"></param>
     /// <returns>true, these rectangles are equal</returns>
-    inline bool operator==(const rect &lr) const noexcept
+    [[nodiscard]] inline bool operator==(const rect lr) const noexcept
     {
         return lr.left == left && lr.top == top && lr.right == right && lr.bottom == bottom;
     }
 
+    [[nodiscard]] inline bool operator!=(const rect r) const noexcept
+    {
+        return !(*this == r);
+    }
+
     /// <summary>
-    /// operator `>`
+    /// operator '>'
     /// </summary>
     /// <param name="lr"></param>
-    /// <returns>true, the sides of this rectangle are larger</returns>
-    inline bool operator>(const rect &lr) const noexcept
+    /// <returns>true, if the sides of this rectangle are larger</returns>
+    [[nodiscard]] inline bool operator>(const rect lr) const noexcept
     {
         return width() > lr.width() && height() > lr.height();
+    }
+
+    /// <summary>
+    /// operator '>='
+    /// </summary>
+    /// <param name="lr"></param>
+    /// <returns>true, if the sides of this rectangle are greater than or equal</returns>
+    [[nodiscard]] inline bool operator>=(const rect lr) const noexcept
+    {
+        return width() >= lr.width() && height() >= lr.height();
     }
 
     /// <summary>
@@ -59,7 +74,7 @@ struct rect
     /// <param name="x"></param>
     /// <param name="y"></param>
     /// <returns>true, this rectangle is inside a rectangle</returns>
-    inline bool in(const int32_t x, const int32_t y) const noexcept
+    [[nodiscard]] inline bool in(const int32_t x, const int32_t y) const noexcept
     {
         return x >= left && x <= right && y >= top && y <= bottom;
     }
@@ -68,8 +83,8 @@ struct rect
     /// in, check area
     /// </summary>
     /// <param name="outer"></param>
-    /// <returns>true, is rectangle in to rectangle</returns>
-    inline bool in(const rect &outer) const noexcept
+    /// <returns>true, is rectangle in to rectangle (is intersect)</returns>
+    [[nodiscard]] inline bool in(const rect outer) const noexcept
     {
         return !((outer.right <= left || right <= outer.left || outer.bottom <= top || bottom <= outer.top));
     }
@@ -78,7 +93,7 @@ struct rect
     /// is_null()
     /// </summary>
     /// <returns>true, is zero rectangle </returns>
-    inline bool is_null() const noexcept
+    [[nodiscard]] inline bool is_null() const noexcept
     {
         return 0 == left && 0 == top && 0 == right && 0 == bottom;
     }
@@ -87,7 +102,7 @@ struct rect
     /// is_hide, width <= 0 || height <= 0
     /// </summary>
     /// <returns> true is hide or bad area </returns>
-    inline bool is_hide() const noexcept
+    [[nodiscard]] inline bool is_hide() const noexcept
     {
         return left >= right || top >= bottom;
     }
@@ -96,7 +111,7 @@ struct rect
     /// empty, zero width & height
     /// </summary>
     /// <returns> bool </returns>
-    inline bool empty() const noexcept
+    [[nodiscard]] inline bool empty() const noexcept
     {
         return right == left || bottom == top;
     }
@@ -105,7 +120,7 @@ struct rect
     /// width
     /// </summary>
     /// <returns> int32_t </returns>
-    inline int32_t width() const noexcept
+    [[nodiscard]] inline int32_t width() const noexcept
     {
         return right - left;
     }
@@ -114,13 +129,25 @@ struct rect
     /// height
     /// </summary>
     /// <returns> int32_t </returns>
-    inline int32_t height() const noexcept
+    [[nodiscard]] inline int32_t height() const noexcept
     {
         return bottom - top;
     }
 
     /// <summary>
-    /// move
+    /// move position
+    /// </summary>
+    /// <param name="val"></param>
+    inline void move(const int32_t val) noexcept
+    {
+        left += val;
+        top += val;
+        right += val;
+        bottom += val;
+    }
+
+    /// <summary>
+    /// move position
     /// </summary>
     /// <param name="x"></param>
     /// <param name="y"></param>
@@ -146,6 +173,15 @@ struct rect
     }
 
     /// <summary>
+    /// normalize rect, eq: { rect t = *this; t.put(0, 0); return t; }
+    /// </summary>
+    /// <returns>rect</returns>
+    [[nodiscard]] inline rect normalize() const noexcept
+    {
+        return { 0, 0, width(), height() };
+    }
+
+    /// <summary>
     /// resize rectangle
     /// </summary>
     /// <param name="val"></param>
@@ -163,6 +199,24 @@ struct rect
     inline void resize(const int32_t width_, const int32_t height_) noexcept
     {
         right = left + width_;
+        bottom = top + height_;
+    }
+
+    /// <summary>
+    /// resize width rectangle
+    /// </summary>
+    /// <param name="width_"></param>
+    inline void resize_width(const int32_t width_) noexcept
+    {
+        right = left + width_;
+    }
+
+    /// <summary>
+    /// resize height rectangle
+    /// </summary>
+    /// <param name="height_"></param>
+    inline void resize_height(const int32_t height_) noexcept
+    {
         bottom = top + height_;
     }
 
@@ -192,25 +246,37 @@ struct rect
     }
 
     /// <summary>
-    /// min : intersect two rectangle, static
+    /// intersect (min) two rectangle, static
+    /// </summary>
+    /// <param name="r"></param>
+    /// <returns>rect</returns>
+    [[nodiscard]] inline rect intersect(const rect r) const noexcept
+    {
+        rect t;
+        intersect(t, *this, r);
+        return t;
+    }
+
+    /// <summary>
+    /// intersect (min) two rectangle, static
     /// </summary>
     /// <param name="r1"></param>
     /// <param name="r2"></param>
-    /// <returns></returns>
-    static inline rect min(const rect& r1, const rect& r2) noexcept
+    /// <returns>rect</returns>
+    [[nodiscard]] static inline rect intersect(const rect r1, const rect r2) noexcept
     {
         rect r;
-        min(r, r1, r2);
+        intersect(r, r1, r2);
         return r;
     }
 
     /// <summary>
-    /// min : intersect two rectangle, static
+    /// intersect (min) two rectangle, static
     /// </summary>
     /// <param name="r_out"></param>
     /// <param name="r1"></param>
     /// <param name="r2"></param>
-    static inline void min(rect& r_out, const rect& r1, const rect& r2) noexcept
+    static inline void intersect(rect& r_out, const rect r1, const rect r2) noexcept
     {
         r_out.left = std::max(r1.left, r2.left);
         r_out.right = std::min(r1.right, r2.right);
@@ -219,15 +285,27 @@ struct rect
     }
 
     /// <summary>
-    /// max : union two rectangle
+    /// union (max) two rectangle
+    /// </summary>
+    /// <param name="r1"></param>
+    /// <returns>rect</returns>
+    [[nodiscard]] inline rect union_(const rect r) const noexcept
+    {
+        rect t;
+        union_(t, *this, r);
+        return t;
+    }
+
+    /// <summary>
+    /// union (max) two rectangle
     /// </summary>
     /// <param name="r1"></param>
     /// <param name="r2"></param>
-    /// <returns></returns>
-    static inline rect max(const rect &r1, const rect& r2) noexcept
+    /// <returns>rect</returns>
+    [[nodiscard]] static inline rect union_(const rect r1, const rect r2) noexcept
     {
         rect r;
-        max(r, r1, r2);
+        union_(r, r1, r2);
         return r;
     }
 
@@ -237,7 +315,7 @@ struct rect
     /// <param name="r_out"></param>
     /// <param name="r1"></param>
     /// <param name="r2"></param>
-    static inline void max(rect &r_out, const rect &r1, const rect& r2) noexcept
+    static inline void union_(rect& r_out, const rect r1, const rect r2) noexcept
     {
         r_out.left = std::min(r1.left, r2.left);
         r_out.right = std::max(r1.right, r2.right);

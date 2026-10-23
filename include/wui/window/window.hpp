@@ -23,14 +23,59 @@
 namespace wui
 {
 
-enum class window_state
+/// window geometry state
+enum class window_geometry_state
 {
     normal,
-    minimized,
+    minimized, /// non-geometric state, left for compatibility old wui, for create window
     maximized,
     fullscreen
-    //, pinned
 };
+
+struct window_state_current
+{
+    window_geometry_state prev_geometry{ window_geometry_state::normal }; // (for maximized/fullscreen restore state) old geometric state, exclude minimized
+    window_geometry_state geometry{ window_geometry_state::normal }; // geometric state, exclude minimized
+    bool is_iconic{ false }; // eq. minimized (X11: IconicState : ICCCM)
+    bool is_hidden{ false }; // (X11: EWMH _NET_WM_STATE_HIDDEN)
+    bool focused{ false };
+    //bool is_pinned{ false }; // for future: _NET_WM_STATE_ABOVE / _NET_WM_STATE_BELOW  ?
+    //bool active{ false };
+    //bool monitor_power{ true };
+
+    void set_geometry(const window_geometry_state state) noexcept
+    {
+        if (window_geometry_state::minimized == state)
+        {
+            is_iconic = true;
+            return; // non-geometric state
+        }
+
+        prev_geometry = geometry;
+        if (window_geometry_state::maximized != state
+            && window_geometry_state::fullscreen != state)
+        {
+            geometry = window_geometry_state::normal;
+            //is_iconic = false;
+        }
+        else
+        {
+            geometry = state;
+        }
+    }
+
+    void set_iconic(const bool iconic) noexcept
+    {
+        is_iconic = iconic;
+    }
+
+    void set_hidden(const bool hidden) noexcept
+    {
+        is_hidden = hidden;
+    }
+};
+
+using window_state = window_geometry_state; // left for compatibility old wui
 
 enum class window_control
 {
@@ -47,60 +92,69 @@ class listener;
 
 class window : public i_window, public i_control, public std::enable_shared_from_this<window>
 {
+    friend listener;
 public:
-    window(std::string_view theme_control_name = tc, std::shared_ptr<i_theme> theme_ = nullptr);
-    virtual ~window();
+    explicit window(std::string_view theme_control_name = tc, std::shared_ptr<i_theme> theme_ = nullptr,
+        window_geometry_state state = window_geometry_state::normal);
+    ~window() override;
 
     /// i_window impl
-    virtual bool init(std::string_view caption, const rect& position,
+    bool init(std::string_view caption, const rect position,
         window_style style, std::function<void(void)> close_callback = nullptr) override;
-    virtual void destroy() override;
+    void destroy() override;
 
-    virtual void add_control(std::shared_ptr<i_control> control, const rect& position) override;
-    virtual void remove_control(std::shared_ptr<i_control> control) override;
+    void add_control(std::shared_ptr<i_control> control, const rect position) override;
+    void remove_control(std::shared_ptr<i_control> control) override;
 
-    virtual void bring_to_front(std::shared_ptr<i_control> control) override;
-    virtual void move_to_back(std::shared_ptr<i_control> control) override;
+    void bring_to_front(std::shared_ptr<i_control> control) override;
+    void move_to_back(std::shared_ptr<i_control> control) override;
 
-    virtual void redraw(const rect& position, bool clear = false) override;
+    ///NB: To fully refresh the child window, use i_control::redraw()
+    void redraw(const rect position, bool clear = false) override;
 
-    virtual std::string subscribe(std::function<void(const event&)> receive_callback,
+    std::string subscribe(std::function<void(const event&)> receive_callback,
         event_type event_types, std::shared_ptr<i_control> control = nullptr) override;
-    virtual void unsubscribe(std::string_view subscriber_id) override;
+    void unsubscribe(std::string_view subscriber_id) override;
 
     /// Get the context of this window or parent's.
-    [[nodiscard]] virtual system_context &context() override;
+    [[nodiscard]] system_context &context() override;
 
     /// i_control impl
-    virtual void draw(graphic &gr, const rect& paint_rect) override;
 
-    virtual void set_position(const rect& position) override;
-    [[nodiscard]] virtual rect position() const override;
-    virtual void move(const int32_t dx, const int32_t dy) override;
+    /// drawing the child window
+    void draw(graphic &gr, const rect paint_rect) override;
 
-    virtual void set_parent(std::shared_ptr<window> window_) override;
-    [[nodiscard]] virtual std::weak_ptr<window> parent() const override;
-    virtual void clear_parent() override;
+    /// The method uses an extended child window border
+    void redraw([[maybe_unused]] bool clear = false ) override;
 
-    virtual void set_topmost(bool yes) override;
-    [[nodiscard]] virtual bool topmost() const override;
+    void set_position(const rect position) override;
+    [[nodiscard]] rect position() const override;
+    void move(const int32_t dx, const int32_t dy) override;
 
-    [[nodiscard]] virtual bool focused() const override;    // only ctrl
-    [[nodiscard]] virtual bool focusing() const override;   // only ctrl
-    [[nodiscard]] virtual focus_mode get_focus_mode() const override;
+    void set_parent(std::shared_ptr<window> window_) override;
+    [[nodiscard]] std::weak_ptr<window> parent() const override;
+    void clear_parent() override;
 
-    virtual void update_theme_control_name(std::string_view theme_control_name) override;
-    virtual void update_theme(std::shared_ptr<i_theme> theme_ = nullptr) override;
+    void set_topmost(bool yes) override;
+    [[nodiscard]] bool topmost() const override;
 
-    virtual void show() override;
-    virtual void hide() override;
-    [[nodiscard]] virtual bool showed() const override;
+    [[nodiscard]] bool focused() const override;    // only ctrl
+    [[nodiscard]] bool focusing() const override;   // only ctrl
+    [[nodiscard]] focus_mode get_focus_mode() const override;
 
-    virtual void enable() override;
-    virtual void disable() override;
-    [[nodiscard]] virtual bool enabled() const override;
+    void update_theme_control_name(std::string_view theme_control_name) override;
+    void update_theme(std::shared_ptr<i_theme> theme_ = nullptr) override;
 
-    [[nodiscard]] virtual error get_error() const override;
+    void show() override;
+    void hide() override;
+    [[nodiscard]] bool showed() const override;
+
+    void enable() override;
+    void disable() override;
+    [[nodiscard]] bool enabled() const override;
+
+    [[nodiscard]] error get_error() override;
+
 
     /// Window style methods
     [[nodiscard]] int32_t caption_height(const window_style create_style = window_style::frame) const;
@@ -129,7 +183,33 @@ public:
     void minimize();
     void expand();
     void normal();
-    [[nodiscard]] window_state state() const;
+
+    // The "minimized" state is left for compatibility
+    // EWMH:: Состояние iconic (свернутое в панель задач / иконку) концептуально ортогонально
+    // (не зависит) от геометрических состояний вроде maximized или fullscreen.
+    [[nodiscard]] window_state state() const noexcept
+    {
+        return (window_state_.is_iconic && window_state::normal != window_state_.geometry) ?
+            window_state::minimized : window_state_.geometry;
+    }
+
+    [[nodiscard]] const window_state_current& state_current() const noexcept
+    {
+        return window_state_;
+    }
+
+    [[nodiscard]] bool is_iconic() const noexcept
+    {
+        return window_state_.is_iconic;
+    }
+
+    [[nodiscard]] bool is_visual() const noexcept
+    {
+        return !window_state_.is_hidden;
+    }
+
+    /// event loop for dialog, etc (see example hello_word)
+    void event_loop();
 
     void close();
 
@@ -161,21 +241,22 @@ public:
     }
 
     /// Get the type of this window
-    [[nodiscard]] bool is_physical_window() const
+    [[nodiscard]] bool is_physical_window() const noexcept
     {
-#ifdef _WIN32
-        return root_window_ || (context_.hwnd != NULL);
-#elif __linux__
-        return root_window_ || (context_.connection && context_.wnd);
-#endif
+        return context_.valid();
     }
 
-    [[nodiscard]] bool docked() const
+    [[nodiscard]] bool docked() const noexcept
     {
         return docked_;
     }
 
-    [[nodiscard]] std::string_view get_control_name() const
+    void root_window(const bool root_wnd) noexcept
+    {
+        root_window_ = root_wnd;
+    }
+
+    [[nodiscard]] std::string_view get_control_name() const noexcept
     {
         return tcn; // string_view(), если lock() ?
     }
@@ -183,7 +264,8 @@ public:
     {
         return theme_;
     }
-    void set_focus_mode(const focus_mode mode)
+
+    void set_focus_mode(const focus_mode mode) noexcept
     {
         if (mode & focus_mode::always)
         {
@@ -200,7 +282,11 @@ public:
 
     [[nodiscard]] rect get_parent_position();
 
-public:
+    void set_scale(const double scale) noexcept
+    {
+        context_.scale = scale;
+    }
+
     /// Control name in theme / locale
     static constexpr const char *tc = "window";
 
@@ -235,13 +321,11 @@ public:
 private:
     bool _destroy();
 
-    bool disable_close_callback{false};
-
 #if __linux__
     void destroy_window();
 #endif
 
-    system_context context_;
+    system_context context_{};
     graphic graphic_;
 
     std::vector<std::shared_ptr<i_control>> controls;
@@ -250,30 +334,33 @@ private:
     std::shared_ptr<i_control> input_control;
 
     std::string caption;
-    rect position_, parent_position_, normal_position;
-    int32_t min_width, min_height;
-    window_style window_style_;
-    wui::window_state window_state_, prev_window_state_;
+    rect position_{}, parent_position_{}, normal_position{};
+    rect caption_text_rect{};
+    int32_t min_width{}, min_height{};
+    window_style window_style_{ window_style::frame };
+    window_state_current window_state_{};
 
     std::string tcn; /// control name in theme
     std::shared_ptr<i_theme> theme_;
 
-    bool showed_;
-    bool enabled_;
+    bool showed_{ true };
+    bool enabled_{ true };
 
-    /// назначается первому открытому окну, используется при закрытии всех окон
-    /// Set this window always physical
-    bool root_window_;
+    /// This flag is set in the first window opened:
+    /// assigned to the first opened window, used when closing all windows
+    bool root_window_{ false };
 
     bool docked_{ false };
     bool docked_setup{ false }; // initially docked during setup
+    bool disable_close_callback{ false };
     bool exit_{ false };
-    std::atomic<bool> skip_draw_;
+
+    bool skip_draw_{ false };
 
     focus_mode focus_mode_{ focus_mode::wnd | focus_mode::default_ };
 
     std::weak_ptr<window> parent_;
-    std::weak_ptr<window> transient_window; // parent window for this transient window
+    std::weak_ptr<window> transient_window;
     std::shared_ptr<window> docked_control;
     std::shared_ptr<window> selected_child;
 
@@ -302,9 +389,9 @@ private:
         size_nesw_top,
         size_nesw_bottom
     };
-    moving_mode moving_mode_;
+    moving_mode moving_mode_{ moving_mode::none };
 
-    int16_t x_click, y_click;
+    int16_t x_click{ 0 }, y_click{ 0 };
 
     error err;
 
@@ -317,52 +404,53 @@ private:
 
 #ifdef _WIN32
 
-    bool mouse_tracked;
-    bool device_change_handling;
+    bool mouse_tracked{ false };
+    bool device_change_handling{ false };
 
-    HDEVNOTIFY dev_notify_handle;
+    HDEVNOTIFY dev_notify_handle{ 0 };
 
     static LRESULT CALLBACK wnd_proc(HWND hWnd, UINT message, WPARAM w_param, LPARAM l_param);
 
     static void ProcessDeviceChanges(window* wnd, WPARAM w, LPARAM l);
-
+    HPOWERNOTIFY hPowerNotify{ NULL };
 #elif __linux__
+    inline static bool xcb_atom_init{ false };
 
-    xcb_atom_t wm_protocols_event{ },
-        wm_delete_msg{ },
-        wm_change_state{ },
-        net_wm_state{ },
-        net_wm_state_focused{ },
-        net_wm_state_above{ },
-        net_wm_state_skip_taskbar{ },
-        net_wm_name{ },
-        utf8_string{ },
-        net_active_window{ },
-        net_wm_state_fullscreen{ },
-        net_wm_state_maximized_vert{ }, net_wm_state_maximized_horz{ },
-        wm_state_hidden{ },
-        net_wm_moveresize{ };
+    inline static xcb_atom_t wm_protocols_event{ XCB_NONE },
+        wm_delete_msg{ XCB_NONE },
+        wm_change_state{ XCB_NONE },
+        wm_state{ XCB_NONE },
+        net_wm_state{ XCB_NONE },
+        net_wm_state_focused{ XCB_NONE },
+        net_wm_state_above{ XCB_NONE },
+        net_wm_state_skip_taskbar{ XCB_NONE },
+        net_wm_name{ XCB_NONE },
+        utf8_string{ XCB_NONE },
+        net_active_window{ XCB_NONE },
+        net_wm_state_fullscreen{ XCB_NONE },
+        net_wm_state_max_vert{ XCB_NONE }, net_wm_state_max_horz{ XCB_NONE },
+        net_wm_state_hidden{ XCB_NONE },
+        net_wm_moveresize{ XCB_NONE };
 
-    time_t prev_button_click;
+    time_t prev_button_click{ 0 };
 
     std::unique_ptr<udev_handler> udev_handler_;
 
-    uint8_t key_modifier;
+    uint8_t key_modifier{ 0 };
+    uint32_t key_sym{ 0 };
 
     void process_events(xcb_generic_event_t &e);
 
     void init_atoms();
     void set_size_hints();
 
+    void send_destroy_event(const bool flush_ = true);
 
-    void send_destroy_event();
-
-    void change_style(xcb_atom_t type, xcb_atom_t action,
-        xcb_atom_t style1, xcb_atom_t style2=0) noexcept;
+    void change_style(xcb_atom_t type, xcb_atom_t action, xcb_atom_t style1, xcb_atom_t style2=0) noexcept;
 
     void update_window_style();
 
-    bool check_wm_state(const xcb_atom_t atom) const;
+    void update_window_state(const xcb_atom_t atom);
 
     void set_wm_name(std::string_view caption);
 
@@ -390,7 +478,6 @@ private:
 
     [[nodiscard]] std::shared_ptr<i_control> get_focused();
 
-//    void start_docking(std::shared_ptr<i_control> control);
     void start_docking(std::shared_ptr<window> control);
     void end_docking();
 
@@ -399,16 +486,12 @@ private:
     void update_button_images();
     void update_buttons();
 
-    void draw_border(graphic &gr, const color c, int32_t border_width);
+    void draw_border(graphic &gr, const color c, const int32_t bw);
     void draw_selected_border(graphic &gr, int32_t border_width);
-    void draw_caption(graphic& gr, const rect &paint_rect, const int32_t border_width);
+    void draw_caption(graphic& gr, const rect paint_rect);
 
     void send_internal(internal_event_type type, int32_t x, int32_t y);
 
-    bool focused_{ false }; // true : this window focused
-    //bool _active{ false }; // true : this window active
-
-    friend listener;
 };
 
 }

@@ -33,7 +33,6 @@ list::list(std::string_view theme_control_name_, std::shared_ptr<i_theme> theme_
         std::bind(&list::on_scroll, this, std::placeholders::_1,
             std::placeholders::_2), scroll::tc, theme__))
 {
-    update_theme();
 }
 
 list::~list()
@@ -45,37 +44,42 @@ list::~list()
     }
 }
 
-int32_t list::get_font_size() const
-{
-    return theme_font(tcn, tv_font, theme_).size;
-}
-
-bool list::update_mem_gr()
+bool list::update_mem_gr(graphic& gr)
 {
     if (!mem_gr)
     {
         return false;
     }
 
-    auto width = position_.width() - 2 * (theme_data_.border_width + theme_data_.item_indent);
-    auto height = position_.height() - title_height - 2 * theme_data_.border_width
-        - theme_data_.item_indent;
+    const auto width = position_.width() - 2 * theme_data_.item_indent;
+    const auto height = position_.height() - title_height
+        - (title_height ? 1 : 2) * theme_data_.item_indent;
 
-    auto current = mem_gr->max_size();
-
-    if (current.width() < width || current.height() < height)
+#if defined(_WIN32)
+    if (mem_gr->width() < width || mem_gr->height() < height)
     {
         mem_gr->release();
-        return mem_gr->init({ 0, 0, width, height }, theme_data_.background);
+        return mem_gr->init(width, height, theme_data_.background);
     }
+#else
+    mem_gr->set_target(gr);
+    if (mem_gr->width() != width || mem_gr->height() != height)
+    {
+        return mem_gr->init(width, height, theme_data_.background);
+    }
+#endif
 
-    mem_gr->clear();
-    return true;
+    if (mem_gr->inited())
+    {
+        mem_gr->clear({ 0, 0, width , height });
+        return true;
+    }
+    return false;
 }
 
-void list::draw(graphic &gr, const rect&)
+void list::draw(graphic &gr, const rect)
 {
-    if (!showed_ || position_.is_hide() || !update_mem_gr())
+    if (!showed_ || position_.is_hide() || !update_mem_gr(gr))
     {
         return;
     }
@@ -96,9 +100,13 @@ void list::draw(graphic &gr, const rect&)
     }
 
     // Copying the offscreen buffer to the parent context
-    gr.copy_area(control_pos, *mem_gr,
-        -theme_data_.border_width - theme_data_.item_indent ,
-        -title_height - theme_data_.border_width);
+    gr.copy_area(
+        {
+            control_pos.left + theme_data_.item_indent,
+            control_pos.top + (title_height ? title_height : theme_data_.item_indent),
+            control_pos.right - theme_data_.item_indent,
+            control_pos.bottom - theme_data_.item_indent,
+        }, *mem_gr, 0, 0);
 
     if ((mouse_on_control || focused_) && has_scrollbar())
     {
@@ -652,10 +660,9 @@ rect list::get_preferred_size(const int32_t height)
     }
     if (w)
         w -= column_ident_;
-    const auto h = check_items_height(height - title_height - theme_data_.border_width)
-        + title_height + 2 * theme_data_.border_width + theme_data_.item_indent;
-    return { 0, 0,
-        w + 2 * (theme_data_.border_width + theme_data_.item_indent), h };
+    const auto h = check_items_height(height - title_height - theme_data_.item_indent)
+        + title_height + 2 * theme_data_.item_indent;
+    return { 0, 0, w + 2 * theme_data_.item_indent, h };
 }
 
 void list::move(const int32_t dx, const int32_t dy)
@@ -666,22 +673,24 @@ void list::move(const int32_t dx, const int32_t dy)
 
 void list::update_scroll(const bool changed)
 {
-    const auto border_width = theme_data_.border_width / 2;
-    vert_scroll->set_position(
-        {
-            position_.right - border_width - scroll::full_scrollbar_size,
-            position_.top + title_height + border_width,
-            position_.right - border_width,
-            position_.bottom - border_width - theme_data_.item_indent
-        });
-
+    if (!position_.is_null())
+    {
+        const auto border_width = theme_data_.border_width / 2;
+        vert_scroll->set_position(
+            {
+                position_.right - theme_data_.item_indent - scroll::full_scrollbar_size,
+                position_.top + title_height + theme_data_.item_indent,
+                position_.right - theme_data_.item_indent,
+                position_.bottom - theme_data_.item_indent - theme_data_.item_indent
+            });
+    }
     if (changed)
     {
         update_scroll_area();
     }
 }
 
-void list::set_position(const rect& position__)
+void list::set_position(const rect position__)
 {
     const bool changed = position__.height() != position_.height();
     position_ = position__;
@@ -704,11 +713,15 @@ void list::set_parent(std::shared_ptr<window> window)
     window->add_control(vert_scroll, { 0 });
 
     /// Create memory dc for inner content
-    if (mem_gr) mem_gr.reset();
+    if (mem_gr)
+    {
+        mem_gr.reset();
+    }
     auto parent__ = parent_.lock();
     if (parent__)
     {
         mem_gr = std::make_unique<graphic>(parent__->context());
+        update_theme_data();
     }
 }
 
@@ -723,14 +736,13 @@ void list::clear_parent()
     if (parent__)
     {
         parent__->remove_control(vert_scroll);
-
         parent__->unsubscribe(my_control_sid);
-        my_control_sid.clear();
+        redraw(true);
     }
-
-    parent_.reset();
+    my_control_sid.clear();
 
     mem_gr.reset();
+    parent_.reset();
 }
 
 void list::set_topmost(bool yes)
@@ -753,7 +765,7 @@ bool list::focusing() const
     return enabled_ && showed_;
 }
 
-error list::get_error() const
+error list::get_error()
 {
     return {};
 }
@@ -783,13 +795,24 @@ void list::update_theme_data()
 
     theme_data_.item_indent = theme_dimension(tcn, tv_item_indent, theme_);
 
-    if (theme_data_.round
-        && (theme_data_.item_indent < theme_data_.round - theme_data_.border_width - 1))
+    const auto t = theme_data_.item_indent;
+    if (theme_data_.round && theme_data_.round > theme_data_.border_width/2)
     {
-        theme_data_.item_indent = theme_data_.round - theme_data_.border_width - 1;
+        theme_data_.item_indent = static_cast<int32_t>(0.5 + theme_data_.round * (1.0 - 1.0 / 1.414)
+            + theme_data_.border_width / (2 * 1.414));
+    }
+    else
+    {
+        theme_data_.item_indent = static_cast<int32_t>(0.5 + theme_data_.border_width / 2.0);
+    }
+
+    if (theme_data_.item_indent < t)
+    {
+        theme_data_.item_indent = t;
     }
 
     theme_data_.font_ = std::move(theme_font(tcn, tv_font, theme_));
+    theme_data_.font_line_height = wui::font_line_height(theme_data_.font_, nullptr, &theme_data_.font_max_height);
 }
 
 void list::update_theme(std::shared_ptr<i_theme> theme__)
@@ -801,24 +824,24 @@ void list::update_theme(std::shared_ptr<i_theme> theme__)
     theme_ = theme__;
 
     const auto border_width_old = theme_data_.border_width;
-    const auto font_size_old = theme_data_.font_.size;
+    const auto font_old = std::move(theme_data_.font_);
     const auto item_indent_old = theme_data_.item_indent;
+    const auto background_old = theme_data_.background;
     update_theme_data();
 
     const auto title_height_old = title_height;
     calc_title_height();
 
-    if (mem_gr)
+    if (mem_gr && background_old != theme_data_.background)
     {
         mem_gr->set_background_color(theme_data_.background);
     }
 
     if ((title_height_old != title_height
         || border_width_old != theme_data_.border_width
-        || font_size_old != theme_data_.font_.size
+        || font_old != theme_data_.font_
         || item_indent_old != theme_data_.item_indent
-        )
-        && !position_.is_hide())
+        ) && !position_.is_hide())
     {
         update_scroll(true);
     }
@@ -842,15 +865,17 @@ void list::hide()
     if (showed_)
     {
         showed_ = false;
-
         vert_scroll->hide();
+
+        if (position_.is_hide())
+            return;
 
         auto parent__ = parent_.lock();
         if (parent__)
         {
-            auto pos = position();
-            pos.widen(theme_data_.border_width);
-            parent__->redraw(pos, true);
+            auto clear_pos = position();
+            clear_pos.widen(theme_data_.border_width);
+            parent__->redraw(clear_pos, true);
         }
     }
 }
@@ -886,6 +911,12 @@ bool list::enabled() const
 void list::update_columns(const std::vector<column> &columns__)
 {
     columns_ = columns__;
+    for (auto& col : columns_)
+    {
+        const auto text_width = 2 * text_indent + measure_text(col.caption, theme_data_.font_).right;
+        col.width = col.width + text_width;
+    }
+
     calc_title_height();
     if (!position_.is_hide())
     {
@@ -925,23 +956,23 @@ void list::select_item(int32_t n_item)
 // TODO: int64_t n_column
 void list::set_column_width(int32_t n_column, int32_t width)
 {
-    if (n_column >= static_cast<int32_t>(columns_.size()))
+    if (n_column >= 0 && n_column < static_cast<int32_t>(columns_.size()))
     {
         columns_[n_column].width = width;
         redraw();
     }
 }
 
-int32_t list::get_item_height(int32_t nItem) const
+int32_t list::get_item_height(int32_t n_item) const
 {
     int32_t height = -1;
-    if (item_height_callback && nItem >= 0)
+    if (item_height_callback && n_item >= 0)
     {
-        item_height_callback(nItem, height);
+        item_height_callback(n_item, height);
     }
     return height <= 0 ? -1 :
-        (height < theme_data_.font_.size + 2 * theme_data_.border_item
-            ? theme_data_.font_.size + 2 * theme_data_.border_item : height);
+        (height < theme_data_.font_line_height + 2 * theme_data_.border_item
+            ? theme_data_.font_line_height + 2 * theme_data_.border_item : height);
 }
 
 void list::set_item_count(int32_t count)
@@ -1026,7 +1057,7 @@ int32_t list::get_item_top(int32_t n_item) const
 }
 
 void list::set_draw_callback(std::function<void(graphic&, const int32_t nItem,
-    const rect&, const item_state state)> draw_callback_) noexcept
+    const rect, const item_state state)> draw_callback_) noexcept
 {
     draw_callback = draw_callback_;
 }
@@ -1071,7 +1102,7 @@ void list::on_scroll(scroll_state ss, int32_t v)
     }
 }
 
-void list::redraw()
+void list::redraw(bool clear)
 {
     if (showed_)
     {
@@ -1080,7 +1111,7 @@ void list::redraw()
         {
             auto pos = position();
             pos.widen(theme_data_.border_width);
-            parent__->redraw(pos);
+            parent__->redraw(pos, clear);
         }
     }
 }
@@ -1115,7 +1146,7 @@ void list::calc_title_height()
         return;
     }
 
-    title_height = theme_data_.font_.size + text_indent * 2;
+    title_height = theme_data_.font_line_height + text_indent * 2;
 }
 
 int32_t list::get_left_position_text(int32_t n_col) const noexcept
@@ -1151,18 +1182,13 @@ void list::draw_titles(graphic &gr_)
     }
 
     const auto top = control_pos.top + theme_data_.border_width + 1;
-    const auto bottom = control_pos.top + theme_data_.border_width
-        + title_height - 1;// theme_data_.item_indent;
+    const auto bottom = control_pos.top + theme_data_.border_width + title_height - 1;
+    const auto right = control_pos.left + position_.width() - theme_data_.item_indent;
 
-    const auto right = control_pos.left + position_.width()
-        - theme_data_.border_width - theme_data_.item_indent;
+    int32_t left = control_pos.left + theme_data_.item_indent;
 
-    int32_t left = control_pos.left
-        + theme_data_.border_width + theme_data_.item_indent;//
-
-    for (size_t i = 0; i < columns_.size(); ++i)
+    for (const auto& c: columns_)
     {
-        const auto& c = columns_[i];
         auto r = left + c.width;
         if (r >= right)
         {
@@ -1174,13 +1200,12 @@ void list::draw_titles(graphic &gr_)
             break;
         }
 
-        // TODO: add move div
-        gr_.draw_rect({ r - 1, top, r + 1, bottom },
-            theme_data_.title_column);
+        gr_.draw_rect({ r - 1, top, r + 1, bottom }, theme_data_.title_column);
 
         if (w + text_indent > 0)
         {
-            gr_.draw_text({ left + text_indent, control_pos.top + text_indent, 0, 0 },
+            gr_.draw_text({ left + text_indent, control_pos.top + text_indent,
+                control_pos.right, control_pos.bottom },
                 c.caption, theme_data_.title_text, theme_data_.font_);
         }
 
@@ -1222,8 +1247,7 @@ void list::draw_items(graphic &gr_)
 
     const auto control_pos = position();
     const int32_t top_ = -vert_scroll->get_scroll_pos(); // +1
-    const int32_t right = position_.width()
-        - 2 * (theme_data_.border_width - theme_data_.item_indent);
+    const int32_t right = position_.width() - theme_data_.item_indent;
 
     for (auto item = first_item; item < last_item; ++item)
     {

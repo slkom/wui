@@ -38,7 +38,7 @@ public:
         sheets_height = sheets_height_;
     }
 private:
-    int32_t value_{ 8 };
+    int32_t value_{ 0 };
     int32_t sheets_height{ 30 };
     void IncSizeTextRect();
     void DecSizeTextRect();
@@ -62,8 +62,8 @@ private:
         }, wui::button_view::switcher);
 
     std::shared_ptr<wui::text> wuiInfoText =
-        std::make_shared<wui::text>(wui::about::full_name + std::string("\n")
-        + wui::about::version
+        std::make_shared<wui::text>(wui::about::full_name + std::string(": ")
+         + wui::about::version
 #if !defined(NDEBUG)
          + " [Debug]"
 #endif
@@ -88,7 +88,7 @@ private:
     std::shared_ptr<wui::button> mainSiteAnchor = std::make_shared<wui::button>(wui::about::web, []() { wui::open_uri(wui::about::web); }, wui::button_view::anchor);
 
     std::shared_ptr<wui::scroll> vertScroll = std::make_shared<wui::scroll>(1000, 0, wui::orientation::vertical,
-        [this](wui::scroll_state, int32_t v) {  welcomeText->set_text<false>(std::to_string(horScroll->get_scroll_pos()) + std::string(", ") + std::to_string(v)); redraw(true); });
+        [this](wui::scroll_state, int32_t v) {  welcomeText->set_text<false>(std::to_string(horScroll->get_scroll_pos()) + std::string(", ") + std::to_string(v)); welcomeText->redraw(); });
     std::shared_ptr<wui::scroll> horScroll = std::make_shared<wui::scroll>(1000, 1000, wui::orientation::horizontal,
-        [this](wui::scroll_state, int32_t v) {  welcomeText->set_text<false>(std::to_string(v) + std::string(", ") + std::to_string(vertScroll->get_scroll_pos())); redraw(true); });
+        [this](wui::scroll_state, int32_t v) {  welcomeText->set_text<false>(std::to_string(v) + std::string(", ") + std::to_string(vertScroll->get_scroll_pos())); welcomeText->redraw(); });
 };

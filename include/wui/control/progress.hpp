@@ -11,7 +11,7 @@
 #include <wui/control/i_control.hpp>
 #include <wui/graphic/graphic.hpp>
 #include <wui/common/rect.hpp>
-//#include <wui/common/color.hpp>
+#include <wui/common/color.hpp>
 #include <wui/common/orientation.hpp>
 #include <wui/event/event.hpp>
 
@@ -28,9 +28,10 @@ public:
     progress(int32_t from, int32_t to, int32_t value, orientation orientation_ = orientation::horizontal, std::string_view theme_control_name = tc, std::shared_ptr<i_theme> theme_ = nullptr);
     virtual ~progress();
 
-    virtual void draw(graphic &gr, const rect&) override;
+    virtual void draw(graphic &gr, const rect) override;
+    virtual void redraw(bool clear = false) override;
 
-    virtual void set_position(const rect& position) override;
+    virtual void set_position(const rect position) override;
     [[nodiscard]] virtual rect position() const override;
     virtual void move(const int32_t dx, const int32_t dy) override;
 
@@ -55,18 +56,14 @@ public:
     [[nodiscard]] virtual bool focused() const override;
     [[nodiscard]] virtual bool focusing() const override;
 
-    [[nodiscard]] virtual error get_error() const override;
+    [[nodiscard]] virtual error get_error() override;
 
-public:
     /// Progress's interface
     void set_range(int32_t from, int32_t to);
     void set_value(int32_t value);
     void set_click_callback(std::function<void(int32_t, bool)> click_callback);
     void set_point(int32_t value, bool is_max);
 
-    void redraw();
-
-public:
     /// Control name in theme
     static constexpr const char *tc = "progress"; /// control name in theme
 

@@ -2,16 +2,16 @@
   "controls": [
     {
       "type": "window",
-      "background": "#fffffe",
+      "background": "#edf3f5",
       "border": "#a1bac4",
       "border_focus": "#957de3",
-      "round": 0,
+      "round": 4,
       "border_width": 1,
       "text": "#191914",
       "active_button": "#1aafe9",
       "caption_font": {
         "name": "Segoe UI",
-        "size": 18
+        "size": 16
       }
     },
     {
@@ -19,7 +19,7 @@
       "color": "#191914",
       "font": {
         "name": "Segoe UI",
-        "size": 18
+        "size": 16
       }
     },
     {
@@ -43,51 +43,51 @@
       "focusing": 1,
       "font": {
         "name": "Segoe UI",
-        "size": 18
+        "size": 16
       }
     },
     {
       "type": "button_menu",
-      "calm": "#fffffe",
+      "calm": "#edf3f5",
       "active": "#dcdcdc",
 	  "hover_border": "#dcdcdc",
       "focused_border": "#aaaaa9",
       "border_width": 1,
       "text": "#181818",
-      "disabled": "#fffffe",
+      "disabled": "#edf3f5",
       "round": 5,
       "focusing": 1,
       "font": {
         "name": "Segoe UI",
-        "size": 18
+        "size": 16
       }
     },
     {
       "type": "tool_button",
-      "calm": "#fffffe",
+      "calm": "#edf3f5",
       "active": "#dcdcdc",
       "border_width": 0,
       "text": "#181818",
-      "disabled": "#fffffe",
+      "disabled": "#edf3f5",
       "round": 0,
       "focusing": 0,
       "font": {
         "name": "Segoe UI",
-        "size": 18
+        "size": 16
       }
     },
     {
       "type": "red_tool_button",
-      "calm": "#fffffe",
+      "calm": "#edf3f5",
       "active": "#eb0f14",
       "border_width": 0,
       "text": "#181818",
-      "disabled": "#fffffe",
+      "disabled": "#edf3f5",
       "round": 0,
       "focusing": 0,
       "font": {
         "name": "Segoe UI",
-        "size": 18
+        "size": 16
       }
     },
     {
@@ -100,10 +100,10 @@
       "hover_border": "#6faebe",
       "focused_border": "#215663",
       "border_width": 1,
-      "round": 5,
+      "round": 3,
       "font": {
         "name": "Segoe UI",
-        "size": 18
+        "size": 16
       }
     },
     {
@@ -123,10 +123,10 @@
       "border_width": 1,
       "border_item": 1,
       "item_indent ": 0,
-      "round": 5,
+      "round": 3,
       "font": {
         "name": "Segoe UI",
-        "size": 18
+        "size": 16
       }
     },
     {
@@ -146,10 +146,10 @@
       "border_width": 2,
       "border_item": 1,
       "item_indent ": 0,
-      "round": 5,
+      "round": 3,
       "font": {
         "name": "Segoe UI",
-        "size": 18
+        "size": 16
       }
     },
     {
@@ -171,10 +171,10 @@
       "border_width": 1,
       "border_item": 0,
       "item_indent ": 0,
-      "round": 5,
+      "round": 3,
       "font": {
         "name": "Segoe UI",
-        "size": 18
+        "size": 16
       }
     },
     {

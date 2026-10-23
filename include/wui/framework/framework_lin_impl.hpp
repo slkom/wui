@@ -15,25 +15,24 @@
 #include <vector>
 #include <atomic>
 #include <condition_variable>
+#include <functional>
 
 namespace wui
 {
-
 namespace framework
 {
-
 class framework_lin_impl : public i_framework
 {
 public:
-    framework_lin_impl();
+    framework_lin_impl() = default;;
     virtual ~framework_lin_impl() override = default;
 
-    virtual void run() override;
+    [[nodiscard]] virtual bool run(std::function<bool()> task) override;
     virtual void stop() override;
 
     [[nodiscard]] virtual bool started() const override;
 
-    [[nodiscard]] virtual error get_error() const override;
+    [[nodiscard]] virtual error get_error() override;
 
 private:
     std::atomic<bool> started_;
@@ -45,6 +44,5 @@ private:
 
 }
 
-
-}
+} // framework
 

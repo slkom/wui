@@ -31,14 +31,16 @@ public:
         horizontal
     };
 
-    splitter(orientation orientation, std::function<void(int32_t, int32_t)> callback, std::string_view theme_control_name = tc, std::shared_ptr<i_theme> theme_ = nullptr);
+    splitter(orientation orientation, std::function<void(int32_t, int32_t)> callback,
+        std::string_view theme_control_name = tc, std::shared_ptr<i_theme> theme_ = nullptr);
 
     virtual ~splitter();
 
     /// i_control impl
-    virtual void draw(graphic &gr, const rect&) override;
+    virtual void draw(graphic &gr, const rect ) override;
+    virtual void redraw(bool clear = false) override;
 
-    virtual void set_position(const rect& position) override;
+    virtual void set_position(const rect position) override;
     [[nodiscard]] virtual rect position() const override;
     virtual void move(const int32_t dx, const int32_t dy) override;
 
@@ -63,19 +65,15 @@ public:
     [[nodiscard]] virtual bool focused() const override;
     [[nodiscard]] virtual bool focusing() const override;
 
-    [[nodiscard]] virtual error get_error() const override;
+    [[nodiscard]] virtual error get_error() override;
 
-public:
     /// Splitter interface
-    void set_callback(std::function<void(int32_t, int32_t)> callback_); // оставлен для совместимости
+    void set_callback(std::function<void(int32_t, int32_t)> callback_); // left for compatibility
     // NB:  prev_pos : позволяет вычислить смещение
-    void set_callback_ex(std::function<void(const rect& pos, const rect& prev_pos)> callback_);
+    void set_callback_ex(std::function<void(const rect pos, const rect prev_pos)> callback_);
 
     void set_margins(int32_t min_, int32_t max_);
 
-    void redraw();
-
-public:
     /// Control name in theme
     static constexpr const char *tc = "splitter";
 
@@ -85,27 +83,27 @@ public:
 
 private:
     orientation orientation_;
-    std::function<void(int32_t, int32_t)> callback1; // оставлен для совместимости
-    std::function<void(const rect& , const rect& )> callback;
-    int32_t margin_min, margin_max;
+    std::function<void(int32_t, int32_t)> callback1; // left for compatibility
+    std::function<void(const rect , const rect)> callback;
+    int32_t margin_min{ -1 }, margin_max{ -1 };
 
     std::string tcn; /// control name in theme
     std::shared_ptr<i_theme> theme_;
 
-    rect position_;
-    rect prev_pos;
+    rect position_{};
+    rect prev_pos{};
 
     std::weak_ptr<window> parent_;
     std::string my_control_sid, my_plain_sid;
 
-    bool showed_, enabled_, active, topmost_;
+    bool showed_{ true }, enabled_{ true }, active{ false }, topmost_{ false };
 
     void receive_control_events(const event &ev);
     void receive_plain_events(const event &ev);
 
 };
 
-// для совместимости
-typedef enum class splitter::orientation splitter_orientation;
+// added for compatibility
+typedef enum splitter::orientation splitter_orientation;
 
 }

@@ -53,19 +53,24 @@ enum class message_result
 class message
 {
 public:
-    message(std::shared_ptr<window> transient_window_,
+    explicit message(std::shared_ptr<window> transient_window_,
         bool docked_ = true,
         std::shared_ptr<i_theme> theme_ = nullptr);
-    ~message();
+    ~message() = default;
 
-    void show(std::string_view message_,
+    void show(std::string_view message__,
         std::string_view title_,
-        const message_icon icon_,
-        const message_button button_,
-        std::function<void(message_result)> result_callback = [](message_result) {});
+        const message_icon icon__,
+        const message_button button__,
+        std::function<void(message_result)> result_callback_ = nullptr);
 
     message_result get_result() const noexcept;
     void set_docked(const bool docked = true);
+
+    void event_loop()
+    {
+        window_->event_loop();
+    }
 
 protected:
     std::string message_;

@@ -399,7 +399,7 @@ void config_impl_reg::delete_key(std::string_view section)
     }
 }
 
-error config_impl_reg::get_error() const
+error config_impl_reg::get_error()
 {
     return {};
 }

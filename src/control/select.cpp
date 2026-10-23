@@ -21,23 +21,13 @@
 namespace wui
 {
 
-static const int32_t select_horizontal_indent = 5;
-
 select::select(std::string_view theme_control_name, std::shared_ptr<i_theme> theme__)
     :
     tcn(theme_control_name),
     theme_(theme__),
-    position_{ 0 },
     list_theme(make_custom_theme()),
-    list_(std::make_shared<list>(list::tc, list_theme)),
-    showed_(true), enabled_(true), active_(false), topmost_(false),
-    focused_(false),
-    focusing_(true),
-    left_shift(0),
-    item_height_(32)
+    list_(std::make_shared<list>(list::tc, list_theme))
 {
-    update_list_theme();
-
     list_->set_mode(list::list_mode::simple_topmost);
     list_->set_draw_callback(std::bind(&select::draw_list_item, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4));
     list_->set_item_height_callback([this](int32_t, int32_t& h) { h = item_height_; });
@@ -55,12 +45,7 @@ select::~select()
     }
 }
 
-int32_t select::get_font_size() const
-{
-    return theme_font(tcn, tv_font, theme_).size;
-}
-
-void select::draw(graphic &gr, const rect&)
+void select::draw(graphic &gr, const rect)
 {
     if (!showed_ || position_.is_null())
     {
@@ -87,8 +72,11 @@ void select::draw(graphic &gr, const rect&)
     }
 
     /// Draw the button
-    draw_arrow_down(gr, { control_pos.right - static_cast<int32_t>(control_pos.height() / 1.5),
-            control_pos.top + static_cast<int32_t>(control_pos.height() / 2.1)});
+    {
+        const auto left = control_pos.right - static_cast<int32_t>(control_pos.height() / 1.5);
+        const auto top = control_pos.top + static_cast<int32_t>(control_pos.height() / 2.1);
+        draw_arrow_down(gr, { left, top, left + 14, top + 14 });
+    }
 
 
     if (list_->selected_item() < 0
@@ -103,27 +91,17 @@ void select::draw(graphic &gr, const rect&)
         control_pos.width() - 2 * (border_width + select_horizontal_indent));
 
     gr.draw_text({ control_pos.left + border_width + select_horizontal_indent,
-        control_pos.top + border_width + (control_pos.height() - font_.size) / 2 },
+        control_pos.top + border_width + (control_pos.height() - gr.font_max_height(font_)) / 2 },
         text,
         theme_color(tcn, tv_text, theme_),
         font_);
 }
 
-void select::draw_arrow_down(graphic &gr, const rect &pos)
+void select::draw_arrow_down(graphic &gr, const rect pos)
 {
-    auto color = get_rgb(theme_color(tcn, !active_ ? tv_border : tv_focused_border, theme_));
-
-    constexpr int h = 4;
-    int w = 8;
-
-    for (int j = 0; j < h; ++j)
-    {
-        for (int i = 0; i < w; ++i)
-        {
-            gr.draw_pixel({ pos.left + j + i, pos.top + j }, color);
-        }
-        w -= 2;
-    }
+    const auto color = theme_color(tcn, !active_ ? tv_border : tv_focused_border, theme_);
+    static const graphic::point2i pts_down[4]{ { 3, 5 }, { 11, 5 }, { 8, 9 }, { 6, 9 } };
+    gr.fill_path(pos, pts_down, 4, color);
 }
 
 void select::select_up()
@@ -329,7 +307,7 @@ void select::update_list_theme()
     list_->update_theme(list_theme);
 }
 
-void select::set_position(const rect& position__)
+void select::set_position(const rect position__)
 {
     position_ = position__;
     if (list_->showed())
@@ -368,6 +346,8 @@ void select::set_parent(std::shared_ptr<window> window_)
 
         my_plain_sid = window_->subscribe(std::bind(&select::receive_plain_events, this, std::placeholders::_1),
             wui::event_type::mouse | wui::event_type::keyboard);
+
+        update_theme();
     }
 }
 
@@ -382,13 +362,13 @@ void select::clear_parent()
     if (parent__)
     {
         parent__->remove_control(list_);
-
         parent__->unsubscribe(my_control_sid);
-        my_control_sid.clear();
-
         parent__->unsubscribe(my_plain_sid);
-        my_plain_sid.clear();
+        redraw(true);
     }
+    my_control_sid.clear();
+    my_plain_sid.clear();
+
     parent_.reset();
 }
 
@@ -412,7 +392,7 @@ bool select::focusing() const
     return enabled_ && showed_ && focusing_;
 }
 
-error select::get_error() const
+error select::get_error()
 {
     return {};
 }
@@ -437,18 +417,20 @@ void select::update_theme(std::shared_ptr<i_theme> theme__)
 void select::show()
 {
     showed_ = true;
-    redraw();
+    redraw(true);
 }
 
 void select::hide()
 {
     showed_ = false;
+    if (position_.is_hide())
+        return;
     auto parent__ = parent_.lock();
     if (parent__)
     {
-        auto pos = position();
-        pos.widen(theme_dimension(tcn, tv_border_width, theme_));
-        parent__->redraw(pos, true);
+        auto clear_pos = position();
+        clear_pos.widen(theme_dimension(tcn, tv_border_width, theme_));
+        parent__->redraw(clear_pos, true);
     }
 }
 
@@ -565,7 +547,7 @@ void select::set_change_callback(std::function<void(int32_t, int64_t)> change_ca
     change_callback = change_callback_;
 }
 
-void select::redraw()
+void select::redraw(bool clear)
 {
     if (showed_)
     {
@@ -574,12 +556,12 @@ void select::redraw()
         {
             auto pos = position();
             pos.widen(theme_dimension(tcn, tv_border_width, theme_));
-            parent__->redraw(pos);
+            parent__->redraw(pos, clear);
         }
     }
 }
 
-void select::draw_list_item(graphic &gr, const int32_t n_item, const rect &item_rect, const list::item_state state)
+void select::draw_list_item(graphic &gr, const int32_t n_item, const rect item_rect, const list::item_state state)
 {
     if (static_cast<int32_t>(items_.size()) <= n_item)
     {
@@ -610,7 +592,7 @@ void select::draw_list_item(graphic &gr, const int32_t n_item, const rect &item_
     gr.draw_text({ item_rect.left + select_horizontal_indent, item_rect.top + (item_rect.height() - text_height) / 2 }, text, text_color, font);
 }
 
-void select::activate_list_item(const int32_t n_item [[maybe_unused]] )
+void select::activate_list_item([[maybe_unused]] const int32_t n_item)
 {
     list_->hide();
     redraw();

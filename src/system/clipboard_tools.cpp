@@ -47,12 +47,12 @@ void clipboard_put(std::string_view text, system_context &context)
     }
 }
 
-bool is_text_in_clipboard(system_context &context [[maybe_unused]] )
+bool is_text_in_clipboard([[maybe_unused]] system_context &context)
 {
     return IsClipboardFormatAvailable(CF_UNICODETEXT);
 }
 
-std::string clipboard_get_text(system_context &context [[maybe_unused]] )
+std::string clipboard_get_text([[maybe_unused]] system_context &context)
 {
     if (!OpenClipboard(NULL))
     {

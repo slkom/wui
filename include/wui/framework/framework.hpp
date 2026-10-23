@@ -11,6 +11,7 @@
 #pragma once
 
 #include <wui/common/error.hpp>
+#include <functional>
 
 namespace wui
 {
@@ -20,7 +21,7 @@ namespace framework
 
 [[nodiscard]] bool init();
 
-void run();
+int run(std::function<bool()> task = nullptr);
 void stop();
 [[nodiscard]] bool started();
 

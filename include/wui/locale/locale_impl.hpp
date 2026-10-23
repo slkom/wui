@@ -20,20 +20,20 @@ class locale_impl : public i_locale
 public:
     locale_impl(locale_type type, std::string_view name);
 
-    [[nodiscard]] virtual locale_type get_type() const;
-    [[nodiscard]] virtual std::string get_name() const;
+    [[nodiscard]] locale_type get_type() const override;
+    [[nodiscard]] std::string get_name() const override;
 
-    virtual void set(std::string_view section, std::string_view value, std::string_view str);
-    [[nodiscard]] virtual const std::string &get(std::string_view section, std::string_view value) const;
+    void set(std::string_view section, std::string_view value, std::string_view str) override;
+    [[nodiscard]] const std::string &get(std::string_view section, std::string_view value) const override;
 
 #ifdef _WIN32
-    virtual void load_resource(int32_t resource_index, std::string_view resource_section);
+    void load_resource(int32_t resource_index, std::string_view resource_section) override;
 #endif
-    virtual void load_json(std::string_view json);
-    virtual void load_file(std::string_view file_name);
-    virtual void load_locale(const i_locale &locale_);
+    void load_json(std::string_view json) override;
+    void load_file(std::string_view file_name) override;
+    void load_locale(const i_locale &locale_) override;
 
-    [[nodiscard]] virtual error get_error() const;
+    [[nodiscard]] error get_error() override;
 
 private:
     locale_type type;

@@ -20,12 +20,12 @@ struct theme_params
     std::string file_name;
     int32_t resource_id;
 
-    inline bool operator==(const theme_params &lv)
+    inline bool operator==(const theme_params &lv) const noexcept
     {
         return name == lv.name;
     }
 
-    inline bool operator==(std::string_view nm)
+    inline bool operator==(std::string_view nm) const noexcept
     {
         return name == nm;
     }

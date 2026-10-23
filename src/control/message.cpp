@@ -34,15 +34,11 @@ message::message(std::shared_ptr<wui::window> transient_window__,
     window_(std::make_shared<window>(window::tc, theme_)),
     icon(std::make_shared<image>(theme_image("message_info", theme_))),
     text_(std::make_shared<text>("", hori_alignment::left, vert_alignment::top, text::tc, theme_)),
-    button0(std::make_shared<button>("", std::bind(&message::button0_click, this), button::tc, theme_)),
-    button1(std::make_shared<button>("", std::bind(&message::button1_click, this), button::tc, theme_)),
-    button2(std::make_shared<button>("", std::bind(&message::button2_click, this), button::tc, theme_)),
+    button0(std::make_shared<button>("", [this]() { button0_click(); }, button::tc, theme_)),
+    button1(std::make_shared<button>("", [this]() { button1_click(); }, button::tc, theme_)),
+    button2(std::make_shared<button>("", [this]() { button2_click(); }, button::tc, theme_)),
     docked_(docked__),
     result_(message_result::undef)
-{
-}
-
-message::~message()
 {
 }
 
@@ -58,7 +54,7 @@ void message::show(std::string_view message__,
     const message_button button__,
     std::function<void(message_result)> result_callback_)
 {
-    if (window_->context().physical())
+    if (window_->context().valid())
     {
         return;
     }
@@ -73,7 +69,7 @@ void message::show(std::string_view message__,
 
     text_->set_text<false>(message_);
 
-    if (!transient_window_ || !transient_window_->context().physical())
+    if (!transient_window_ || !transient_window_->context().valid())
     {
         docked_ = false;
     }

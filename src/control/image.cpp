@@ -160,11 +160,9 @@ namespace wui
 
 #ifdef _WIN32
 image::image(int32_t resource_index_, std::shared_ptr<i_theme> theme__)
-    : theme_(theme__),
-    position_{ 0 },
-    showed_(true), enabled_(true), topmost_(false),
-    resource_index(resource_index_),
-    img(nullptr)
+    :
+    theme_(std::move(theme__)),
+    resource_index(resource_index_)
 {
     load_image_from_resource(static_cast<WORD>(resource_index), boost::nowide::widen(theme_string(tc, tv_resource, theme_)), &img);
     init_color_state();
@@ -172,14 +170,12 @@ image::image(int32_t resource_index_, std::shared_ptr<i_theme> theme__)
 #endif
 
 image::image(std::string_view file_name_, std::shared_ptr<i_theme> theme__)
-    : theme_(theme__),
-    position_{ 0 },
-    showed_(true), enabled_(true), topmost_(false),
-    file_name(file_name_),
+    :
+    theme_(std::move(theme__)),
+    file_name(file_name_)
 #ifdef _WIN32
-    resource_index(0),
+    , resource_index(0)
 #endif
-    img(nullptr)
 {
     load_image_from_file(file_name_, theme_string(tc, tv_path, theme_), &img, err);
 
@@ -189,13 +185,9 @@ image::image(std::string_view file_name_, std::shared_ptr<i_theme> theme__)
 }
 
 image::image(const std::vector<uint8_t> &data)
-    :
-    position_{ 0 },
-    showed_(true), enabled_(true), topmost_(false),
 #ifdef _WIN32
-    resource_index(0),
+    : resource_index(0)
 #endif
-    img(nullptr)
 {
     load_image_from_data(data, &img);
 #ifdef _WIN32
@@ -229,7 +221,7 @@ void image::init_color_state()
 }
 #endif
 
-void image::draw(graphic &gr_, const rect&)
+void image::draw(graphic &gr_, const rect )
 {
     if (!showed_ || position_.is_hide())
     {
@@ -252,12 +244,12 @@ void image::draw(graphic &gr_, const rect&)
 #elif __linux__
     if (img)
     {
-        gr_.draw_surface(*img, position(), !enabled_);
+        gr_.draw_surface(img, position(), !enabled_);
     }
 #endif
 }
 
-void image::set_position(const rect& position__)
+void image::set_position(const rect position__)
 {
     position_ = position__;
 }
@@ -284,6 +276,7 @@ std::weak_ptr<window> image::parent() const
 
 void image::clear_parent()
 {
+    redraw(true);
     parent_.reset();
 }
 
@@ -307,7 +300,7 @@ bool image::focusing() const noexcept
     return false;
 }
 
-error image::get_error() const
+error image::get_error()
 {
     return err;
 }
@@ -340,12 +333,14 @@ void image::update_theme(std::shared_ptr<i_theme> theme__)
 void image::show()
 {
     showed_ = true;
-    redraw();
+    redraw(true);
 }
 
 void image::hide()
 {
     showed_ = false;
+    if (position_.is_hide())
+        return;
     auto parent__ = parent_.lock();
     if (parent__)
     {
@@ -361,13 +356,13 @@ bool image::showed() const
 void image::enable()
 {
     enabled_ = true;
-    //redraw();
+    redraw();
 }
 
 void image::disable()
 {
     enabled_ = false;
-    //redraw();
+    redraw();
 }
 
 bool image::enabled() const
@@ -407,6 +402,7 @@ void image::change_image(std::string_view file_name_)
     path_ = path__;
 
     free_image(&img);
+
     load_image_from_file(file_name, path__, &img, err);
 
     redraw();
@@ -473,14 +469,14 @@ int32_t image::height() const
     return 0;
 }
 
-void image::redraw()
+void image::redraw(bool clear)
 {
-    if (showed_)
+    if (showed_ && !position_.is_hide())
     {
         auto parent__ = parent_.lock();
         if (parent__)
         {
-            parent__->redraw(position());
+            parent__->redraw(position(), clear);
         }
     }
 }

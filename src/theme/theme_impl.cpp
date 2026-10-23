@@ -185,12 +185,7 @@ void theme_impl::load_json(std::string_view json_)
                             str.insert(0, "0x");
                             const uint32_t color_ = static_cast<uint32_t>(std::stoul(str, nullptr, 16));
 
-                            ints[{ control, kvp.first }] = make_color(
-                                get_red_bgra(color_),
-                                get_green_bgra(color_),
-                                get_blue_bgra(color_)
-                                , 0 != get_alpha_bgra(color_) ? get_alpha_bgra(color_) : 0xFF
-                            );
+                            ints[{control, kvp.first}] = detail::setup_color_alpha(color_);
                         }
                         catch (...)
                         {
@@ -324,7 +319,7 @@ void theme_impl::load_theme(const i_theme &theme_)
     fonts = static_cast<const theme_impl*>(&theme_)->fonts;
 }
 
-error theme_impl::get_error() const
+error theme_impl::get_error()
 {
     return err;
 }

@@ -59,9 +59,10 @@ inline constexpr bool operator&(const focus_mode l, const focus_mode r)
 class i_control
 {
 public:
-    virtual void draw(graphic &gr, const rect& paint_rect) = 0;
+    virtual void draw(graphic &gr, const rect paint_rect) = 0;
+    virtual void redraw(bool clear = false) = 0;
 
-    virtual void set_position(const rect& position) = 0;
+    virtual void set_position(const rect position) = 0;
     [[nodiscard]] virtual rect position() const = 0;
 
     virtual void move(const int32_t dx, const int32_t dy) = 0;
@@ -92,7 +93,7 @@ public:
         return focus_mode::default_;
     };
 
-    [[nodiscard]] virtual error get_error() const = 0;
+    [[nodiscard]] virtual error get_error() = 0;
 
     friend class window;
 

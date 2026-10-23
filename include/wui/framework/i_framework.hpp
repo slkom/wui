@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#include <functional>
 
 namespace wui
 {
@@ -20,12 +21,12 @@ namespace wui
 class i_framework
 {
 public:
-    virtual void run() = 0;
+    [[nodiscard]] virtual bool run(std::function<bool()> task) = 0;
     virtual void stop() = 0;
 
     [[nodiscard]] virtual bool started() const = 0;
 
-    [[nodiscard]] virtual error get_error() const = 0;
+    [[nodiscard]] virtual error get_error() = 0;
 
     virtual ~i_framework() {}
 };

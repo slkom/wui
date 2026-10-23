@@ -84,9 +84,5 @@ int main(int argc, char *argv[])
     }
 
     MainFrame mainFrame;
-    mainFrame.Run();
-
-    wui::framework::run();
-
-    return 0;
+    return wui::framework::run([&mainFrame]() -> bool { return mainFrame.Run(); });
 }

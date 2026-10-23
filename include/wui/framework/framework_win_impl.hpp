@@ -19,22 +19,21 @@ namespace wui
 
 namespace framework
 {
-
 class framework_win_impl : public i_framework
 {
 public:
-    framework_win_impl();
+    framework_win_impl() = default;;
     virtual ~framework_win_impl() override = default;
 
-    virtual void run() override;
+    [[nodiscard]] virtual bool run(std::function<bool()> task) override;
     virtual void stop() override;
 
     [[nodiscard]] virtual bool started() const override;
 
-    [[nodiscard]] virtual error get_error() const override;
+    [[nodiscard]] virtual error get_error() override;
 
 private:
-    bool started_;
+    bool started_{false};
 
     error err;
 };

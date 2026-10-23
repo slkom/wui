@@ -46,21 +46,53 @@ enum class window_style : uint32_t
     dialog_topmost = dialog | topmost,
     pinned = pin_button | close_button | resizable | moving
 };
-inline constexpr window_style operator|(const window_style l, const window_style r)
+
+template <typename T,
+    typename = std::enable_if_t<std::is_integral_v<T>>>
+constexpr inline bool operator&&(const T l, const window_style r) noexcept
 {
-    return static_cast <window_style> (static_cast <uint32_t> (l) | static_cast <uint32_t> (r));
+    return (l && static_cast <uint32_t> (r));
 }
-inline constexpr bool operator&(const window_style l, const window_style r)
+
+template <typename T,
+    typename = std::enable_if_t<std::is_integral_v<T>>>
+constexpr inline bool operator||(const T l, const window_style r) noexcept
+{
+    return (l || static_cast <uint32_t> (r));
+}
+
+template <typename T,
+    typename = std::enable_if_t<std::is_integral_v<T>>>
+constexpr inline bool operator==(const T l, const window_style r) noexcept
+{
+    return (l == static_cast <uint32_t> (r));
+}
+
+template <typename T,
+    typename = std::enable_if_t<std::is_integral_v<T>>>
+constexpr inline bool operator!=(const T l, const window_style r) noexcept
+{
+    return (l == static_cast <uint32_t> (r));
+}
+
+constexpr inline bool operator&(const window_style l, const window_style r) noexcept
 {
     return 0 != (static_cast <uint32_t> (l) & static_cast <uint32_t> (r));
 }
-inline constexpr bool operator&&(const window_style  l, const bool r)
+
+constexpr inline window_style operator|(const window_style l, const window_style r) noexcept
 {
-    return static_cast <uint32_t> (l) && r;
+    return static_cast <window_style> (static_cast <uint32_t> (l) | static_cast <uint32_t> (r));
 }
-inline constexpr window_style operator~(const window_style v)
+
+constexpr inline bool check_partial_bits(const window_style style, const window_style mask) noexcept
 {
-    return static_cast <window_style> (~(static_cast <uint32_t> (v)));
+    const auto t = static_cast <uint32_t>(style) & static_cast <uint32_t>(mask);
+    return (t && (t ^ static_cast <uint32_t>(mask))); // eq: (t && (~(uint32_t)style & (uint32_t)mask))
+}
+constexpr inline bool check_full_bits(const window_style style, const window_style mask) noexcept
+{
+    return static_cast <uint32_t>(mask) == (static_cast <uint32_t>(style) & static_cast <uint32_t>(mask));
 }
 
 struct system_context;
@@ -68,24 +100,24 @@ struct system_context;
 class i_window
 {
 public:
-    [[nodiscard]] virtual bool init(std::string_view caption, const rect& position, window_style style,
+    [[nodiscard]] virtual bool init(std::string_view caption, const rect position, window_style style,
         std::function<void(void)> close_callback = nullptr) = 0;
     virtual void destroy() = 0;
 
-    virtual void add_control(std::shared_ptr<i_control> control, const rect& position) = 0;
+    virtual void add_control(std::shared_ptr<i_control> control, const rect position) = 0;
     virtual void remove_control(std::shared_ptr<i_control> control) = 0;
 
     virtual void bring_to_front(std::shared_ptr<i_control> control) = 0;
     virtual void move_to_back(std::shared_ptr<i_control> control) = 0;
 
-    virtual void redraw(const rect& position, bool clear = false) = 0;
+    virtual void redraw(const rect position, bool clear = false) = 0;
 
     [[nodiscard]] virtual std::string subscribe(std::function<void(const event&)> receive_callback, event_type event_types, std::shared_ptr<i_control> control = nullptr) = 0;
     virtual void unsubscribe(std::string_view subscriber_id) = 0;
 
     [[nodiscard]] virtual system_context &context() = 0;
 
-    [[nodiscard]] virtual error get_error() const = 0;
+    [[nodiscard]] virtual error get_error() = 0;
 
 protected:
     ~i_window() {}

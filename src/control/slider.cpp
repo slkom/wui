@@ -44,7 +44,7 @@ slider::~slider()
     }
 }
 
-void slider::draw(graphic &gr, const rect&)
+void slider::draw(graphic &gr, const rect )
 {
     if (!showed_ || position_.is_null())
     {
@@ -99,7 +99,7 @@ void slider::draw(graphic &gr, const rect&)
     }
     else if (orientation == slider_orientation::vertical)
     {
-        auto center_x = control_pos.left + (control_pos.width() / 2) - 1;
+        auto center_x = control_pos.left + control_pos.width() / 2 - 1;
 
         if (centered_mode && from < 0 && to > 0)
         {
@@ -184,8 +184,9 @@ void slider::draw(graphic &gr, const rect&)
         else
         {
             // Обычный режим
-            gr.draw_rect({ center_x - 1, control_pos.bottom, center_x + 1, control_pos.bottom - static_cast<int32_t>(slider_pos) }, perform_color);
-            gr.draw_rect({ center_x - 1, control_pos.top, center_x + 1, control_pos.bottom - static_cast<int32_t>(slider_pos) }, remain_color);
+            const auto y_slider = control_pos.bottom - static_cast<int32_t>(slider_pos);
+            gr.draw_rect({ center_x - 1, y_slider, center_x + 1, control_pos.bottom }, perform_color);
+            gr.draw_rect({ center_x - 1, control_pos.top, center_x + 1, y_slider }, remain_color);
 
             slider_position = { center_x - (slider_height / 2) + 1,
                     control_pos.bottom - static_cast<int32_t>(slider_pos) - (slider_width / 2),
@@ -349,7 +350,7 @@ void slider::receive_plain_events(const event &ev)
     }
 }
 
-void slider::set_position(const rect& position__)
+void slider::set_position(const rect position__)
 {
     position_ = position__;
 
@@ -390,7 +391,11 @@ void slider::clear_parent()
     {
         parent__->unsubscribe(my_control_sid);
         parent__->unsubscribe(my_plain_sid);
+        redraw(true);
     }
+    my_control_sid.clear();
+    my_plain_sid.clear();
+
     parent_.reset();
 }
 
@@ -414,7 +419,7 @@ bool slider::focusing() const
     return enabled_ && showed_;
 }
 
-error slider::get_error() const
+error slider::get_error()
 {
     return {};
 }
@@ -432,8 +437,6 @@ void slider::update_theme(std::shared_ptr<i_theme> theme__)
         return;
     }
     theme_ = theme__;
-
-    redraw();
 }
 
 void slider::show()
@@ -441,7 +444,7 @@ void slider::show()
     if (!showed_)
     {
         showed_ = true;
-        redraw();
+        redraw(true);
     }
 }
 
@@ -450,12 +453,14 @@ void slider::hide()
     if (showed_)
     {
         showed_ = false;
+        if (position_.is_hide())
+            return;
         auto parent__ = parent_.lock();
         if (parent__)
         {
-            auto pos = position();
-            pos.widen(theme_dimension(tcn, tv_slider_height, theme_));
-            parent__->redraw(pos, true);
+            auto clear_pos = position();
+            clear_pos.widen(theme_dimension(tcn, tv_slider_height, theme_));
+            parent__->redraw(clear_pos, true);
         }
     }
 }

@@ -30,9 +30,11 @@ namespace wui
 
 namespace framework
 {
-static std::shared_ptr<listener> listener_;
-static std::shared_ptr<i_framework> instance;
-
+namespace
+{
+std::shared_ptr<listener> listener_;
+std::shared_ptr<i_framework> instance;
+}
 /// Interface
 
 [[nodiscard]] std::shared_ptr <listener> get_listener()
@@ -43,15 +45,24 @@ static std::shared_ptr<i_framework> instance;
 bool init()
 {
 #ifdef _WIN32
-    CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    const auto ret = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    if (S_OK != ret && S_FALSE != ret)
+    {
+        std::cerr << "CoInitializeEx() return: " << ret << std::endl;
+        return false;
+    }
 
     Gdiplus::GdiplusStartupInput gdiplusStartupInput;
     ULONG_PTR gdiplusToken;
-    Gdiplus::GdiplusStartup(&gdiplusToken, &gdiplusStartupInput, NULL);
+    const Gdiplus::Status status = Gdiplus::GdiplusStartup(&gdiplusToken, &gdiplusStartupInput, NULL);
+    if (Gdiplus::Ok != status)
+    {
+        std::cerr << "GdiplusStartup() return: " << status << std::endl;
+        return false;
+    }
 
-    // DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE автоматически подстраивает размер окна
-    // WM_DPICHANGED можно использовать для изменения размера шрифта и ctrl
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE);
+    //SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2); // for DPI
 
 #elif __linux__
     if (setlocale(LC_ALL, "") == NULL)
@@ -61,8 +72,7 @@ bool init()
 #endif
 
     listener_ = std::make_shared<listener>();
-    auto ok = listener_->init();
-    if (!ok)
+    if (!listener_->init())
     {
         std::cerr << "framework::init : listener init(). " << listener_->get_error().str() << std::endl;
         return false;
@@ -70,11 +80,11 @@ bool init()
     return true;
 }
 
-void run()
+int run(std::function<bool()> task)
 {
     if (instance)
     {
-        return;
+        return -1;
     }
 
 #ifdef _WIN32
@@ -85,11 +95,19 @@ void run()
     instance = std::make_shared<framework_mac_impl>();
 #endif
 
-    instance->run();
+    const bool ret = instance->run(task);
+    if (!ret)
+    {
+        std::cerr << "framework::run" << instance->get_error().str() << std::endl;
+    }
+
+    instance.reset();
+    listener_.reset();
 
 #ifdef _WIN32
     CoUninitialize();
 #endif
+    return ret ? 0 : -1;
 }
 
 void stop()
@@ -97,10 +115,9 @@ void stop()
     if (instance)
     {
         auto listener__ = get_listener();
-        if (!listener__ || !listener__->count()) // добавлено для совместимости
+        if (!listener__ || !listener__->count()) // added for compatibility
         {
             instance->stop();
-            instance.reset();
         }
     }
 }
@@ -119,6 +136,6 @@ error get_error()
     return {};
 }
 
-}
+} // framework
 
 }

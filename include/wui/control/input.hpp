@@ -16,6 +16,7 @@
 #include <wui/system/timer.hpp>
 #include <wui/control/menu.hpp>
 #include <wui/control/scroll.hpp>
+#include <wui/theme/theme.hpp>
 
 #include <string>
 #include <functional>
@@ -53,9 +54,10 @@ public:
         std::shared_ptr<i_theme> theme_ = nullptr);
     virtual ~input();
 
-    virtual void draw(graphic &gr, const rect& paint_rect [[maybe_unused]]) override;
+    virtual void draw(graphic &gr, const rect ) override;
+    virtual void redraw(bool clear = false) override;
 
-    virtual void set_position(const rect& position) override;
+    virtual void set_position(const rect position) override;
     [[nodiscard]] virtual rect position() const override;
     virtual void move(const int32_t dx, const int32_t dy) override;
 
@@ -82,9 +84,8 @@ public:
 
     [[nodiscard]] virtual focus_mode get_focus_mode() const override;
 
-    [[nodiscard]] virtual error get_error() const override;
+    [[nodiscard]] virtual error get_error() override;
 
-public:
     /// Input's interface
     template <bool t_redraw = true, bool t_callback = true>
     void set_text(std::string_view text__)
@@ -102,8 +103,26 @@ public:
         }
     }
 
+    /// get full text, include endl
     [[nodiscard]] std::string text() const;
-    [[nodiscard]] int32_t get_font_size() const;
+
+    [[nodiscard]] int32_t get_font_size() const noexcept
+    {
+        return theme_data_.font_.size;
+    }
+
+    /// returns recommended distance between the baselines of two adjacent lines of text
+    [[nodiscard]] int32_t font_line_height() const noexcept
+    {
+        return theme_data_.font_line_height;
+    }
+    /// returns max text height
+    [[nodiscard]] int32_t font_max_height() const noexcept
+    {
+        return theme_data_.font_max_height;
+    }
+    /// returns max text lines height
+    [[nodiscard]] int32_t lines_max_height() const noexcept;
 
     void set_input_view(input_view input_view__);
     [[nodiscard]] input_view get_input_view() const;
@@ -115,8 +134,6 @@ public:
 
     [[nodiscard]] const std::vector<std::string>& get_lines() const;
     void scroll_to_end();
-
-    void redraw();
 
 public:
     /// Control name in theme
@@ -150,9 +167,11 @@ public:
         color border{ make_color(0, 0, 0, 0) };
         color hover_border{ make_color(0, 0, 0, 0) };
         color focused_border{ make_color(0, 0, 0, 0) };
-        int32_t border_width{ };
-        int32_t item_indent{ };
-        int32_t round{ };
+        int32_t border_width{};
+        int32_t item_indent{};
+        int32_t round{};
+        int32_t font_max_height{};
+        int32_t font_line_height{};
         font font_;
     };
 
@@ -164,8 +183,8 @@ public:
 private:
 
     input_view input_view_;
-    focus_mode focus_mode_{ focus_mode::default_ };
     input_content input_content_;
+    focus_mode focus_mode_{ focus_mode::default_ };
     int32_t symbols_limit;
 
     // For multiline
@@ -197,16 +216,17 @@ private:
 
     std::shared_ptr<menu> menu_;
 
-    bool showed_, enabled_, topmost_;
-    bool active, focused_;
-    bool cursor_visible;
-    bool selecting;
+    bool showed_{ true }, enabled_{ true }, topmost_{ false };
+    bool active{ false }, focused_{ false };
+    bool selecting{ false };
+    bool max_width_dirty_{ true };
+
+    std::atomic<bool> cursor_visible{ false };
 
     std::unique_ptr<graphic> mem_gr;
 
     // Cache for maximum line width to avoid expensive recalculations
-    int cached_max_width_{ -1 };
-    bool max_width_dirty_{ true };
+    int32_t cached_max_width_{ -1 };
 
     // Auto-scroll timer for mouse selection
     enum class auto_scroll_type
@@ -254,14 +274,14 @@ private:
     void scroll_to_cursor();
 
     // Cache management for performance
-    [[nodiscard]] int get_max_line_width();
+    [[nodiscard]] int32_t get_max_line_width();
     void invalidate_max_width_cache();
     void update_theme_data();
 
     // Get font
     [[nodiscard]] font get_font();
 
-    [[nodiscard]] bool update_mem_gr();
+    [[nodiscard]] bool update_mem_gr(graphic& gr);
 
     [[nodiscard]] focus_mode check_focus_mode() const;
 };

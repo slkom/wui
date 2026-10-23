@@ -8,13 +8,14 @@
 //
 
 #include <wui/common/to_string.hpp>
+#include <wui/common/rect.hpp>
 
 namespace wui
 {
 
 std::string to_string(const rect &r)
 {
-    return "{" + std::to_string(r.left) + ", " + 
+    return "{" + std::to_string(r.left) + ", " +
         std::to_string(r.top) + ", " +
         std::to_string(r.right) + ", " +
         std::to_string(r.bottom) + "}";

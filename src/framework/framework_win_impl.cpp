@@ -21,19 +21,32 @@ namespace framework
 {
 extern std::shared_ptr<listener> get_listener();
 
-framework_win_impl::framework_win_impl()
-    : started_(false)
-{
-}
-
-void framework_win_impl::run()
+bool framework_win_impl::run(std::function<bool()> task)
 {
     if (started_)
     {
         err.set(error_type::already_started, "framework_win_impl::run()");
-        return;
+        return false;
     }
+    auto listener__ = framework::get_listener();
+    if (!listener__)
+    {
+        return false;
+    }
+
     started_ = true;
+
+    if (task)
+    {
+        const auto ret = task();
+        task = nullptr;
+        if (!ret)
+        {
+            started_ = false;
+            err.set(error_type::external_code_error, "run", "User code return false");
+            return false;
+        }
+    }
 
     MSG msg;
     while (GetMessage(&msg, nullptr, 0, 0))
@@ -42,7 +55,9 @@ void framework_win_impl::run()
         DispatchMessage(&msg);
     }
 
+    listener__->on_exit();
     started_ = false;
+    return true;
 }
 
 void framework_win_impl::stop()
@@ -52,9 +67,6 @@ void framework_win_impl::stop()
         PostQuitMessage(IDCANCEL);
         started_ = false;
     }
-    auto listener__ = framework::get_listener();
-    if (listener__)
-        listener__->stop(); // не обязательно, но помогает отладке
 }
 
 bool framework_win_impl::started() const
@@ -62,13 +74,13 @@ bool framework_win_impl::started() const
     return started_;
 }
 
-error framework_win_impl::get_error() const
+error framework_win_impl::get_error()
 {
     return err;
 }
 
 }
 
-}
+} // framework
 
 #endif

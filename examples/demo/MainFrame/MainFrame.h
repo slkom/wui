@@ -32,10 +32,10 @@ class MainFrame
 public:
     MainFrame();
 
-    void Run();
+    bool Run();
 
 private:
-    static constexpr int32_t WND_WIDTH = 880, WND_HEIGHT = 620;
+    static constexpr int32_t WND_WIDTH = 800, WND_HEIGHT = 600;
 
     std::shared_ptr<wui::window> window;
 

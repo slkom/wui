@@ -47,7 +47,7 @@ public:
     virtual void load_file(std::string_view file_name) override;
     virtual void load_theme(const i_theme &theme_) override;
 
-    [[nodiscard]] virtual error get_error() const override;
+    [[nodiscard]] virtual error get_error() override;
 
 private:
     std::string name;

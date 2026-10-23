@@ -26,147 +26,193 @@ namespace wui
 
 #ifdef __linux__
 
-// TODO:  i_listener, скрыть stop()
-// https://evgenykislov.com/cpp-styleguide/cpp-styleguide-archive/cpp-styleguide-012023/
+namespace framework
+{
+class framework_lin_impl;
+}
+
 class listener
 {
+    friend class framework::framework_lin_impl;
 public:
-    struct wnd
-    {
-        std::shared_ptr<window> window_;
-        bool created{ false };
-
-        [[nodiscard]] bool inited() const noexcept { return created && window_; }
-    };
 
     listener() = default;
     ~listener();
 
     void add_window(xcb_window_t id, std::shared_ptr<window> window);
-    void delete_window(xcb_window_t id);
+    void remove_window(xcb_window_t id);
 
     [[nodiscard]] bool init();
-    [[nodiscard]] bool is_init() const;
+
+    void run();
+
+    [[nodiscard]] bool is_init() const noexcept
+    {
+        return nullptr != context_.display;
+    }
+
+    bool is_thread() const noexcept
+    {
+        return thread.joinable();
+    }
+
+    void add_task(std::function<bool()> task_, std::function<void()> stop__)
+    {
+        task = std::move(task_);
+        stop_ = std::move(stop__);
+    }
+
+    [[nodiscard]] system_context const &context() const noexcept
+    {
+        return context_;
+    }
 
     [[nodiscard]] bool empty() const noexcept
     {
-        return windows.empty();
+        return windows_.empty();
     }
 
     [[nodiscard]] size_t count() const noexcept
     {
-        return windows.size();
+        return windows_.size();
     }
 
-    [[nodiscard]] std::shared_ptr<window> get_first()
+    /// event loop for dialog, etc (see example hello_word)
+    void event_loop(system_context& context_);
+
+    void set_scale(const double scale) noexcept
     {
-        auto it = windows.begin();
-        return it != windows.end() ? it->second.window_ : nullptr;
+        for (auto &w : windows_)
+        {
+            w.second->set_scale(scale);
+        }
     }
 
-    [[nodiscard]] std::shared_ptr<window> get_any_window(std::function<bool(const wnd&)> cmp);
+    [[nodiscard]] std::shared_ptr<window> get_first() noexcept
+    {
+        auto it = windows_.begin();
+        return it != windows_.end() ? it->second : nullptr;
+    }
 
-    [[nodiscard]] system_context const &context() const;
+    [[nodiscard]] std::shared_ptr<window> get_any_window(std::function<bool(const std::shared_ptr<window>& )> cmp);
 
-    [[nodiscard]] error get_error() const;
+    [[nodiscard]] error get_error();
 
-    void stop();
-
-private:
-
+ private:
     std::atomic<bool> started{ false };
+    std::atomic<bool> exit_code{ true };
+
     std::thread thread;
+
     system_context context_;
 
-    std::unordered_map<xcb_window_t, wnd> windows;
+    std::function<bool()> task;
+    std::function<void()> stop_;
+
+    struct identity_hash
+    {
+        std::size_t operator()(xcb_window_t key) const noexcept
+        {
+            return static_cast<std::size_t>(key);
+        }
+    };
+
+    using windows = std::unordered_map<xcb_window_t, std::shared_ptr<window>, identity_hash>;
+    windows windows_;
 
     error err;
 
-
-    void start();
+    void stop();
+    void on_exit();
     void process_events();
 };
 
 #elif _WIN32
 
+namespace framework
+{
+class framework_win_impl;
+}
+
 // Windows implementation
 class listener
 {
+    friend class framework::framework_win_impl;
 public:
-    struct wnd
-    {
-        std::shared_ptr<window> window_;
-
-        [[nodiscard]] bool inited() const noexcept { return nullptr != window_; }
-    };
 
     listener() = default;
-    ~listener() { }
+    ~listener() = default;
 
     void add_window(void* hwnd, std::shared_ptr<window> window_)
     {
-        auto w = windows.find(hwnd);
-        if (w == windows.end())
+        auto w = windows_.find(hwnd);
+        if (w == windows_.end())
         {
-            windows[hwnd] = { std::move(window_) }; //, 0 == windows.size()
+            windows_.try_emplace(hwnd, window_);
         };
     }
 
-    void delete_window(void* hwnd)
+    void remove_window(void* hwnd)
     {
-        auto w = windows.find(hwnd);
-        if (w != windows.end())
+        auto w = windows_.find(hwnd);
+        if (w != windows_.end())
         {
-            windows.erase(w);
+            windows_.erase(w);
         }
     }
 
-    constexpr bool init() const noexcept
+    inline static constexpr bool init() noexcept
     {
         return true;
     }
 
     [[nodiscard]] bool empty() const noexcept
     {
-        return windows.empty();
+        return windows_.empty();
     }
 
     [[nodiscard]] size_t count() const noexcept
     {
-        return windows.size();
+        return windows_.size();
     }
+
+    void set_scale(const double scale) noexcept
+    {
+        for (auto& w : windows_)
+        {
+            w.second->set_scale(scale);
+        }
+    }
+
 
     [[nodiscard]] std::shared_ptr<window> get_first()
     {
-        auto it = windows.begin();
-        return it != windows.end() ? it->second.window_ : nullptr;
+        auto it = windows_.begin();
+        return it != windows_.end() ? it->second : nullptr;
     }
 
-    [[nodiscard]] std::shared_ptr<window> get_any_window(std::function<bool(const wnd&)> cmp)
+    [[nodiscard]] std::shared_ptr<window> get_any_window(std::function<bool(const std::shared_ptr<window>&)> cmp)
     {
-        auto it{ std::find_if(windows.begin(), windows.end(), [cmp](const auto& n) -> bool { return cmp(n.second); }) };
-        return it != windows.end() ? it->second.window_ : nullptr;
+        auto it{ std::find_if(windows_.begin(), windows_.end(), [cmp](const auto& n) -> bool { return cmp(n.second); }) };
+        return it != windows_.end() ? it->second : nullptr;
     }
 
-    [[nodiscard]] system_context const &context() const { static system_context ctx{}; return ctx; }
+    [[nodiscard]] error get_error() { return err; }
 
-    [[nodiscard]] error get_error() const { return err; }
+  private:
 
-    void stop()
-    {
-        // assert(windows.empty());
-        windows.clear();
-    };
-
-private:
-    std::unordered_map<void*, wnd> windows;
+      using windows = std::unordered_map<void*, std::shared_ptr<window>>;
+      windows windows_;
 
     error err;
 
-    //void start() { };
-};
+    inline static void on_exit()
+    {
+    }
 
+};
 
 #endif
 
 }
+

@@ -48,7 +48,7 @@ progress::~progress()
     }
 }
 
-void progress::draw(graphic& gr, const rect&)
+void progress::draw(graphic &gr, const rect )
 {
     if (!showed_ || position_.is_null())
     {
@@ -170,7 +170,7 @@ void progress::draw(graphic& gr, const rect&)
         theme_dimension(tcn, tv_round, theme_));
 }
 
-void progress::set_position(const rect& position__)
+void progress::set_position(const rect position__)
 {
     position_ = position__;
 }
@@ -218,9 +218,11 @@ void progress::clear_parent()
     if (parent__)
     {
         parent__->unsubscribe(my_control_sid);
+        redraw(true);
     }
-    parent_.reset();
     my_control_sid.clear();
+
+    parent_.reset();
 }
 
 void progress::set_topmost(bool yes)
@@ -243,7 +245,7 @@ bool progress::focusing() const
     return false;
 }
 
-error progress::get_error() const
+error progress::get_error()
 {
     return {};
 }
@@ -261,25 +263,26 @@ void progress::update_theme(std::shared_ptr<i_theme> theme__)
         return;
     }
     theme_ = theme__;
-
-    redraw();
 }
 
 void progress::show()
 {
     showed_ = true;
-    redraw();
+    redraw(true);
 }
 
 void progress::hide()
 {
     showed_ = false;
+    if (position_.is_hide())
+        return;
+
     auto parent__ = parent_.lock();
     if (parent__)
     {
-        auto pos = position();
-        pos.widen(theme_dimension(tcn, tv_border_width, theme_));
-        parent__->redraw(pos, true);
+        auto clear_pos = position();
+        clear_pos.widen(theme_dimension(tcn, tv_border_width, theme_));
+        parent__->redraw(clear_pos, true);
     }
 }
 
@@ -356,7 +359,7 @@ void progress::set_point(int32_t value_, bool is_max)
     redraw();
 }
 
-void progress::redraw()
+void progress::redraw(bool clear)
 {
     if (showed_)
     {
@@ -365,7 +368,7 @@ void progress::redraw()
         {
             auto pos = position();
             pos.widen(theme_dimension(tcn, tv_border_width, theme_));
-            parent__->redraw(pos);
+            parent__->redraw(pos, clear);
         }
     }
 }

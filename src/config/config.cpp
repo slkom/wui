@@ -16,7 +16,10 @@ namespace wui
 namespace config
 {
 
-static std::shared_ptr<i_config> instance = nullptr;
+namespace
+{
+std::shared_ptr<i_config> instance = nullptr;
+}
 
 /// Interface
 
@@ -27,6 +30,7 @@ bool use_ini_file(std::string_view file_name)
 
     return instance->get_error().is_ok();
 }
+
 #ifdef _WIN32
 bool use_registry(std::string_view app_key, HKEY root)
 {
@@ -37,7 +41,7 @@ bool use_registry(std::string_view app_key, HKEY root)
 }
 #endif
 
-bool create_config(std::string_view file_name [[maybe_unused]], std::string_view app_key, int64_t root)
+bool create_config([[maybe_unused]] std::string_view file_name, std::string_view app_key, int64_t root)
 {
 #ifdef _WIN32
     return use_registry(app_key, root == 0 ? HKEY_CURRENT_USER : (HKEY)root);

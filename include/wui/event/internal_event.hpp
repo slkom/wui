@@ -18,15 +18,17 @@ enum class internal_event_type
     set_focus,
     remove_focus,
     execute_focused,
-    
+
     size_changed,
     position_changed,
 
     window_expanded,
     window_normalized,
-    window_minimized,
+    window_iconic,
 
-    user_emitted
+    user_emitted,
+
+    window_minimized = window_iconic
 };
 
 struct internal_event

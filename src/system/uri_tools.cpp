@@ -38,7 +38,7 @@ bool open_uri(std::string_view uri)
 
     auto res = system(cmd.c_str());
     return res == 0;
-#endif        
+#endif
 }
 
 }

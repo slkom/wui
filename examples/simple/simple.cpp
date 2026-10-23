@@ -80,7 +80,7 @@ struct PluggedWindow : public std::enable_shared_from_this<PluggedWindow>
     std::shared_ptr<wui::window> dialog3;
     int32_t selectItemNum{ 0 };
     int32_t splitterPos{ 50 };
-    bool plugged{ false };
+    bool plugged{ true };
     wui::rect unplugRect{};
     wui::rect plugRect{};
 
@@ -106,9 +106,9 @@ struct PluggedWindow : public std::enable_shared_from_this<PluggedWindow>
                     pos.empty() ? WND_HEIGHT : pos.height()
                 };
 
-            parentWindow_->add_control(window, plugRect);
+            parentWindow_->add_control(window, plugRect); //NB: if set rect{} add Init() [rem pluggedWindow->Init()]
+            window->set_style(pluged_window_style); //  Init();
             window->set_caption(caption_plug);
-            window->set_style(pluged_window_style);
         }
     }
 
@@ -117,15 +117,15 @@ struct PluggedWindow : public std::enable_shared_from_this<PluggedWindow>
         auto parentWindow_ = parentWindow.lock();
         if (parentWindow_)
         {
-            parentWindow_->emit_event(5555, 1);
+            if (unplugRect.empty())
+            {
+                unplugRect = window->position(); // first
+                const auto pos = parentWindow_->position();
+                unplugRect.resize(unplugRect.width(), pos.height());
+                unplugRect.put(pos.left - unplugRect.width() - 1, pos.top);
+            }
             parentWindow_->remove_control(window);
-        }
-        if (unplugRect.empty())
-        {
-            unplugRect = window->position(); // first
-            const auto pos = parentWindow_->position();
-            unplugRect.resize(unplugRect.width(), pos.height());
-            unplugRect.put(pos.left - unplugRect.width() - 1, pos.top);
+            parentWindow_->emit_event(5555, 1);
         }
 
         plugged = false;
@@ -133,7 +133,7 @@ struct PluggedWindow : public std::enable_shared_from_this<PluggedWindow>
         window->set_caption(caption_unplug);
     }
 
-    void Init()
+    bool Init()
     {
         if (!plugged)
         {
@@ -145,7 +145,7 @@ struct PluggedWindow : public std::enable_shared_from_this<PluggedWindow>
             }
         }
 
-        window->init(caption_plug, plugged ? plugRect : unplugRect,
+        return window->init(caption_plug, plugged ? plugRect : unplugRect,
             plugged ? pluged_window_style : unpluged_window_style,
             [this]() {
                 auto parentWindow_ = parentWindow.lock();
@@ -165,7 +165,7 @@ struct PluggedWindow : public std::enable_shared_from_this<PluggedWindow>
         splitterPos = h - y;
 
         set_position_controls(w, h);
-        window->redraw({ 0, 0, p.right, p.bottom }, true);
+        window->redraw(true);
     }
 
     void set_position_controls(const int32_t w, const int32_t h)
@@ -173,7 +173,6 @@ struct PluggedWindow : public std::enable_shared_from_this<PluggedWindow>
         constexpr int32_t space = 10;
         const int32_t caption_h = 2 + window->caption_height(pluged_window_style);
 
-        //auto y = window->position().height() - splitterPos;
         auto y = h - splitterPos;
 
         const wui::rect rc_text = itemNumText->get_preferred_size();
@@ -233,8 +232,6 @@ struct PluggedWindow : public std::enable_shared_from_this<PluggedWindow>
                 dialog3->subscribe(
                     [this](const wui::event& e)
                     {
-                        // The parent window for this control is already initialized (context and graphics).
-                        // Font size and text length calculations are available for add_control(), etc (get_preferred_size(), measure_text(), ...)
                         if (e.type & wui::event_type::internal)
                         {
                             switch (e.internal_event_.type)
@@ -242,29 +239,36 @@ struct PluggedWindow : public std::enable_shared_from_this<PluggedWindow>
                                 case wui::internal_event_type::window_created:
                                 {
                                     // do not create temporary ui control objects
-                                    constexpr int32_t space = 10;
-                                    constexpr int32_t ctrl_width = 190;
+                                    constexpr int32_t space = 12;
+                                    constexpr int32_t ctrl_width = 220;
+
+                                    dialog3->add_control(text_account, {});
+                                    dialog3->add_control(input1, {});
+                                    dialog3->add_control(input2, {});
+                                    dialog3->add_control(selectedText, {});
+                                    dialog3->add_control(select1, {});
+                                    dialog3->add_control(close_button3, {});
 
                                     int32_t top = dialog3->caption_height();
                                     top += space;
 
                                     wui::rect r = text_account->get_preferred_size();
                                     int32_t hc = r.height() + 8;
-                                    dialog3->add_control(text_account, { space, top, space + r.width(), top + hc });
+                                    text_account->set_position({ space, top, space + r.width(), top + hc });
                                     top += hc + space;
 
-                                    hc = input1->get_font_size() + 8;
-                                    dialog3->add_control(input1, { space, top, space + ctrl_width, top + hc });
+                                    hc = input1->font_line_height() + 8;
+                                    input1->set_position({ space, top, space + ctrl_width, top + hc });
                                     top += hc + space;
 
-                                    hc = input2->get_font_size() + 8;
-                                    dialog3->add_control(input2, { space, top, space + ctrl_width, top + hc });
+                                    hc = input2->font_line_height() + 8;
+                                    input2->set_position({ space, top, space + ctrl_width, top + hc });
                                     top += hc + space;
 
-                                    hc = select1->get_font_size() + 8;
+                                    hc = select1->font_line_height() + 8;
 
                                     const wui::rect rc_text = selectedText->get_preferred_size();
-                                    dialog3->add_control(selectedText, { space, top + hc + space,
+                                    selectedText->set_position({ space, top + hc + space,
                                         space + ctrl_width, top + hc + space + rc_text.height() + 8 });
 
                                     select1->set_items( {
@@ -289,14 +293,14 @@ struct PluggedWindow : public std::enable_shared_from_this<PluggedWindow>
 
                                     select1->select_item_number(selectItemNum);
 
-                                    dialog3->add_control(select1, { space, top, space + ctrl_width, top + hc });
+                                    select1->set_position({ space, top, space + ctrl_width, top + hc });
                                     top += hc + space  + 50;
 
                                     const wui::rect rc_button = close_button3->get_preferred_size();
 
                                     const auto w_dialog = 2 * space + ctrl_width;
                                     const auto left_button = (w_dialog - rc_button.width() - 40)/2;
-                                    dialog3->add_control(close_button3, { left_button, top, left_button + rc_button.width() + 40, top + rc_button.height() });
+                                    close_button3->set_position({ left_button, top, left_button + rc_button.width() + 40, top + rc_button.height() });
                                     top += hc + space;
 
                                     const auto caption = dialog3->docked() ?
@@ -334,23 +338,6 @@ struct PluggedWindow : public std::enable_shared_from_this<PluggedWindow>
 
     void Create()
     {
-        window->subscribe(
-            [this](const wui::event& e)
-            {
-                if (e.type & wui::event_type::internal)
-                {
-                    switch (e.internal_event_.type)
-                    {
-                        case wui::internal_event_type::window_created:
-                        {
-                            // do not create temporary ui control objects
-                        }
-                        break;
-                    }
-                }
-            }
-        , wui::event_type::internal);
-
         list3->set_draw_callback(std::bind(&PluggedWindow::draw_list_item,
             this, std::placeholders::_1, std::placeholders::_2,
             std::placeholders::_3, std::placeholders::_4));
@@ -376,8 +363,6 @@ struct PluggedWindow : public std::enable_shared_from_this<PluggedWindow>
                 itemNumText->set_text(item >= 0 ? "Select item: " + std::to_string(item + 1) : "Select item: ---");
             });
 
-        list3->update_columns({ { 30, "##" }, { 80, "Name" }, { 100, "Role" } });
-
         list3->set_item_height_callback([](int32_t i, int32_t& h)
             {
                 // change (increment) height items
@@ -398,7 +383,7 @@ struct PluggedWindow : public std::enable_shared_from_this<PluggedWindow>
             {
                 const auto constAdd = 35;
                 auto lines = input->get_lines().size();
-                auto font_size = input->get_font_size();
+                auto font_size = input->font_line_height();
 
                 if (lines < 9)
                 {
@@ -421,18 +406,18 @@ struct PluggedWindow : public std::enable_shared_from_this<PluggedWindow>
                 }
             });
 
-        window->add_control(popupMenu, { 0 });
+        window->add_control(popupMenu, { });
 
-        window->add_control(itemNumText, { 0 });
+        window->add_control(itemNumText, { });
 
-        window->add_control(list3, { 0 });
-        window->add_control(horizSplitter, { 0 });
+        window->add_control(list3, { });
+        window->add_control(horizSplitter, { });
 
-        window->add_control(panel, { 0 });
-        window->add_control(button1, { 0 });
-        window->add_control(button2, { 0 });
-        window->add_control(button3, { 0 });
-        window->add_control(input, { 0 });
+        window->add_control(panel, { });
+        window->add_control(button1, { });
+        window->add_control(button2, { });
+        window->add_control(button3, { });
+        window->add_control(input, { });
 
         window->set_control_callback([this](wui::window_control control,
             std::string &tooltip_text, bool )
@@ -462,9 +447,12 @@ struct PluggedWindow : public std::enable_shared_from_this<PluggedWindow>
                 {
                     case wui::internal_event_type::window_created:
                     {
-                        // do not create temporary ui control objects
+                        // do not create, add ui control objects (controls not remove if Plug/Unplug)
+                        list3->update_columns({ { 0, "##" }, { 20, "Name" }, { 50, "Role" } });
                     }
                     break;
+                    // NB: window_expanded event is not used
+                    //     (only the main window sets the new position of the pluggedWindow)
                     case wui::internal_event_type::size_changed:
                     {
                         set_position_controls(e.internal_event_.x, e.internal_event_.y);
@@ -472,7 +460,7 @@ struct PluggedWindow : public std::enable_shared_from_this<PluggedWindow>
                     break;
                     case wui::internal_event_type::user_emitted:
                     {
-#if 1
+#if 0
                         // Uncomment this code to see the received event.
                         int32_t x = e.internal_event_.x, y = e.internal_event_.y;
 
@@ -516,12 +504,13 @@ struct PluggedWindow : public std::enable_shared_from_this<PluggedWindow>
             }
         }, wui::event_type::internal | wui::event_type::system);
 
-        Plug();
-        plugged = true;
-        Init();
+        if(plugged)
+            Plug();
+        else
+            Unplug();
     }
 
-    void draw_list_item(wui::graphic &gr, const int32_t nItem, const wui::rect &itemRect, const wui::list::item_state state)
+    void draw_list_item(wui::graphic &gr, const int32_t nItem, const wui::rect itemRect, const wui::list::item_state state)
     {
         const auto& td = list3->get_theme_data();
         const auto border_width = td.border_width;
@@ -538,7 +527,7 @@ struct PluggedWindow : public std::enable_shared_from_this<PluggedWindow>
         auto textColor = wui::theme_color(wui::input::tc, wui::input::tv_text);
 
         auto textRect = itemRect;
-        const auto shift_y = (itemRect.height() - td.font_.size) / 2 - border_width;
+        const auto shift_y = (itemRect.height() - td.font_max_height) / 2 - border_width;
         textRect.move(list3->get_left_position_text(0), shift_y);
         gr.draw_text(textRect, std::to_string(nItem + 1), textColor, td.font_);
 
@@ -555,8 +544,8 @@ struct PluggedWindow : public std::enable_shared_from_this<PluggedWindow>
 #ifdef _WIN32
 int APIENTRY _tWinMain(_In_ HINSTANCE,
     _In_opt_ HINSTANCE,
-    _In_ LPTSTR lpCmdLine [[maybe_unused]],
-    _In_ int nCmdShow [[maybe_unused]] )
+    [[maybe_unused]] _In_ LPTSTR lpCmdLine,
+    [[maybe_unused]] _In_ int nCmdShow)
 #elif __linux__
 int main(int argc, char *argv[])
 #endif
@@ -636,8 +625,6 @@ int main(int argc, char *argv[])
             } }
         });
 
-    window->add_control(menu, { 0 });
-
     // button_view::image_menu : no border if control is not focused or active
     auto menuButton = std::make_shared<wui::button>("Settings", []()
         {}, wui::button_view::image_menu, IMG_SETTINGS, 32, "button_menu");
@@ -650,21 +637,17 @@ int main(int argc, char *argv[])
                 menu->show_on_control(menuButton, 5);
         });
 
-    window->add_control(menuButton, {});
-
     auto horizProgressBar = std::make_shared<wui::progress>(0, 100, 50);
-    window->add_control(horizProgressBar, {});
 
     auto horizSlider = std::make_shared<wui::slider>(0, 100, 50,
         [&horizProgressBar](int32_t value) { horizProgressBar->set_value(value); },
         wui::slider_orientation::horizontal);
-    window->add_control(horizSlider, {});
 
     auto vertProgressBar = std::make_shared<wui::progress>(0, 100, 80, wui::orientation::vertical);
-    auto vertSlider = std::make_shared<wui::slider>(0, 100, 80, [&vertProgressBar](int32_t value) { vertProgressBar->set_value(value); }, wui::slider_orientation::vertical);
+    auto vertSlider = std::make_shared<wui::slider>(0, 100, 80, [&vertProgressBar](int32_t value) {
+        vertProgressBar->set_value(value); }, wui::slider_orientation::vertical);
 
     auto accountImage = std::make_shared<wui::image>(IMG_ACCOUNT);
-    window->add_control(accountImage, {});
 
     auto vertSplitter = std::make_shared<wui::splitter>(wui::splitter::orientation::vertical, nullptr);
 
@@ -674,7 +657,8 @@ int main(int argc, char *argv[])
     list2->set_item_height_callback([](int32_t , int32_t& h) { h = 24; });
     list2->set_item_count(5);
     list2->select_item(0);
-    list2->set_draw_callback([&list2](wui::graphic& gr, int32_t nItem, const wui::rect& itemRect, wui::list::item_state state)
+
+    list2->set_draw_callback([&list2](wui::graphic& gr, int32_t nItem, const wui::rect itemRect, wui::list::item_state state)
         {
             const auto& td = list2->get_theme_data();
             const auto border_width = td.border_width;
@@ -691,7 +675,7 @@ int main(int argc, char *argv[])
             auto textColor = wui::theme_color(wui::input::tc, wui::input::tv_text);
 
             auto textRect = itemRect;
-            const auto shift_y = (itemRect.height() - td.font_.size) / 2 - border_width;
+            const auto shift_y = (itemRect.height() - td.font_max_height) / 2 - border_width;
             textRect.move(list2->get_left_position_text(0), shift_y);
             gr.draw_text(textRect, std::to_string(nItem + 1), textColor, td.font_);
 
@@ -702,19 +686,20 @@ int main(int argc, char *argv[])
 
 
     auto pluggedWindow = std::make_shared<PluggedWindow>(window, vertSplitter);
-    pluggedWindow->Create();
 
     auto createPluggedButton = std::make_shared<wui::button>("Create plugged window", nullptr);
     auto closePluggedButton = std::make_shared<wui::button>("Close plugged window", nullptr);
 
     createPluggedButton->set_callback([&]()
         {
-            createPluggedButton->disable();
-            closePluggedButton->enable();
             pluggedWindow = std::make_shared<PluggedWindow>(window, vertSplitter);
             pluggedWindow->Create();
-        });
-    createPluggedButton->disable();
+            if (pluggedWindow->Init())
+            {
+                createPluggedButton->disable();
+                closePluggedButton->enable();
+            }
+       });
 
     closePluggedButton->set_callback([&]()
         {
@@ -726,9 +711,6 @@ int main(int argc, char *argv[])
             }
         });
 
-    window->add_control(createPluggedButton, {});
-    window->add_control(closePluggedButton, {});
-
     auto text0 = std::make_shared<wui::text>(
         "Высокий уровень вовлечения представителей целевой аудитории является "
         "четким доказательством простого факта: граница обучения кадров "
@@ -739,14 +721,14 @@ int main(int argc, char *argv[])
         "пользу обществу. А ещё базовые сценарии поведения пользователей, "
         "превозмогая сложившуюся непростую экономическую ситуацию, "
         "ограничены исключительно образом.");
-    window->add_control(text0, {});
 
     auto nameInput = std::make_shared<wui::input>(/*"", wui::input_view::password*/);
     nameInput->set_text("Hello world!");
+
+    /// setup nameInput
     //nameInput->set_input_content(wui::input_content::numeric);
     //nameInput->set_symbols_limit(20);
     //nameInput->set_input_view(wui::input_view::readonly);
-    window->add_control(nameInput, {});
 
     auto select3 = std::make_shared<wui::select>();
     select3->set_items({
@@ -758,8 +740,6 @@ int main(int argc, char *argv[])
             { 5, "Item 5" }
         });
     select3->select_item_number(0);
-
-    window->add_control(select3, {});
 
     /*std::thread t([select3, window]() {
         bool has = false;
@@ -780,13 +760,6 @@ int main(int argc, char *argv[])
     t.detach();*/
 
     auto editor = std::make_shared<wui::input>("", wui::input_view::multiline);
-
-    // Setup input multiline:
-    //editor->set_symbols_limit(-1);
-    window->set_focus_mode(wui::focus_mode::react); // restore input focus for this
-    //window->set_focus_mode(wui::focus_mode::always); // always restore input focus for this
-
-    window->add_control(editor, {});
 
     editor->set_text<false, false>("Текстовый редактор\n\n"
         "Мы вынуждены отталкиваться от того, что дальнейшее развитие различных \n"
@@ -820,11 +793,10 @@ int main(int argc, char *argv[])
     auto select1 = std::make_shared<wui::select>();
     auto list1 = std::make_shared<wui::list>();
 
-    list1->update_columns({ { 80, "Account" }, { 80, "Your Phone" } });
     std::vector<std::vector<std::string>> list1_rows;
 
     list1->set_draw_callback(
-        [&list1_rows, &list1](wui::graphic& gr, int32_t nItem, const wui::rect& itemRect, wui::list::item_state state)
+        [&list1_rows, &list1](wui::graphic& gr, int32_t nItem, const wui::rect itemRect, wui::list::item_state state)
         {
             if (nItem >= list1_rows.size())
                 return;
@@ -844,7 +816,7 @@ int main(int argc, char *argv[])
 
             if (!list1_rows.empty() && !list1_rows[nItem].empty())
             {
-                const auto shift_y = (itemRect.height() - td.font_.size) / 2 - border_width;
+                const auto shift_y = (itemRect.height() - td.font_max_height) / 2 - border_width;
                 auto textRect = itemRect;
                 textRect.move(list1->get_left_position_text(0), shift_y);
                 gr.draw_text(textRect, list1_rows[nItem][0], textColor, td.font_);
@@ -859,9 +831,9 @@ int main(int argc, char *argv[])
         }
     );
 
-    auto list1_item_size = list1->get_font_size();
-    list1->set_item_height_callback([list1_item_size](int32_t , int32_t& h)
-        { h = list1_item_size + 2; });
+    auto list1_item_size = 0;// list1->font_line_height();
+    //list1->set_item_height_callback([list1_item_size](int32_t , int32_t& h)
+    //    { h = list1_item_size + 2; });
 
     auto editButton = std::make_shared<wui::button>("Edit",
         [&]()
@@ -874,10 +846,22 @@ int main(int argc, char *argv[])
                         case wui::internal_event_type::window_created:
                         {
                             // do not create temporary ui control objects
+                            dialog->add_control(text_account, {});
+                            dialog->add_control(input1, {});
+                            dialog->add_control(text_phone, {});
+                            dialog->add_control(input2, {});
+                            dialog->add_control(select1, {});
+                            dialog->add_control(dialogMsgButton, {});
+                            dialog->add_control(dialogCloseButton, {});
+
+                            dialog->add_control(list1, {});
+
+                            list1->update_columns({ { 10, "Account" }, { 20, "Your Phone" } });
+
                             constexpr int32_t space_w = 30;
                             constexpr int32_t space_h = 10;
 
-                            list1_item_size = list1->get_font_size();
+                            list1_item_size = list1->font_line_height();
                             list1->set_item_height_callback([list1_item_size](int32_t , int32_t& h)
                                 { h = list1_item_size + 2; });
 
@@ -889,18 +873,18 @@ int main(int argc, char *argv[])
                             top += space_h;
                             wui::rect r = text_account->get_preferred_size();
                             int32_t hc = r.height() + 8;
-                            dialog->add_control(text_account, { space_w, top, space_w + r.width(), top + hc });
+                            text_account->set_position({ space_w, top, space_w + r.width(), top + hc });
                             top += hc + 3;
-                            hc = input1->get_font_size() + 8;
-                            dialog->add_control(input1, { space_w, top, space_w + ctrl_width, top + hc });
+                            hc = input1->font_line_height() + 8;
+                            input1->set_position({ space_w, top, space_w + ctrl_width, top + hc });
                             top += hc + space_h;
 
-                            hc = text_phone->get_font_size() + 8;
-                            dialog->add_control(text_phone, { space_w, top, space_w + ctrl_width, top + hc });
+                            hc = text_phone->font_line_height() + 8;
+                            text_phone->set_position({ space_w, top, space_w + ctrl_width, top + hc });
                             top += hc + 3;
 
-                            hc = input2->get_font_size() + 8;
-                            dialog->add_control(input2, { space_w, top, space_w + ctrl_width, top + hc });
+                            hc = input2->font_line_height() + 8;
+                            input2->set_position({ space_w, top, space_w + ctrl_width, top + hc });
                             top += hc + space_h;
 
                             wui::select_items_t items = {
@@ -912,7 +896,7 @@ int main(int argc, char *argv[])
                             select1->set_items(items);
                             //select1->select_item_number(0);
                             select1->set_change_callback(
-                                [&](int32_t n_item [[maybe_unused]], int64_t id [[maybe_unused]] )
+                                [&]([[maybe_unused]] int32_t n_item, [[maybe_unused]] int64_t id)
                                 {
                                     const std::string imput_text = input1->text();
                                     const auto item = select1->selected_item();
@@ -933,21 +917,20 @@ int main(int argc, char *argv[])
                                 }
                             );
 
-                            hc = select1->get_font_size() + 8;
-                            dialog->add_control(select1, { space_w, top, space_w + ctrl_width, top + hc });
+                            hc = select1->font_line_height() + 8;
+                            select1->set_position({ space_w, top, space_w + ctrl_width, top + hc });
                             top += hc + space_h;
 
-                            hc = 10 * list1->get_font_size() + 8;
-                            dialog->add_control(list1, { space_w, top, space_w + ctrl_width, top + hc });
+                            hc = 10 * list1->font_line_height() + 8;
+                            list1->set_position({ space_w, top, space_w + ctrl_width, top + hc });
                             top += hc + space_h;
 
                             const int32_t hc_but = std::max(r1.height(), r2.height());
                             const int32_t width = 2 * space_w + ctrl_width;
                             const int32_t left_but = (width - (r.width() + space_w + r.width())) / 2;
 
-                            dialog->add_control(dialogMsgButton, { left_but, top, left_but + r1.width(), top + hc_but });
-                            dialog->add_control(dialogCloseButton,
-                                { left_but + r1.width() + space_w, top, left_but + r1.width() + space_w + r2.width(), top + hc_but });
+                            dialogMsgButton->set_position({ left_but, top, left_but + r1.width(), top + hc_but });
+                            dialogCloseButton->set_position({ left_but + r1.width() + space_w, top, left_but + r1.width() + space_w + r2.width(), top + hc_but });
 
                             // NB: key 'return' close dialog, bad idea if this dialog used input control.
                             // dialog->set_default_push_control(dialogCloseButton);
@@ -1000,7 +983,6 @@ int main(int argc, char *argv[])
             exitButton->update_theme(MakeRedButtonTheme(true));
         }
     );
-    window->add_control(darkThemeButton, {});
 
     whiteThemeButton->set_callback(
         [&]()
@@ -1025,26 +1007,20 @@ int main(int argc, char *argv[])
             exitButton->update_theme(MakeRedButtonTheme(false));
         });
 
-    window->add_control(whiteThemeButton, {});
-
-    window->add_control(menu_select_text, {});
-
-    window->add_control(editButton, {});
-    window->add_control(exitButton, {});
-
-    vertSplitter->set_callback_ex([&](const wui::rect& act_pos, const wui::rect& prev_pos)
+    vertSplitter->set_callback_ex([&](const wui::rect act_pos, const wui::rect prev_pos)
         {
             if (pluggedWindow->plugged)
             {
                 const auto pos = pluggedWindow->window->position();
-                pluggedWindow->window->set_position({ 0, pos.top, act_pos.left, pos.bottom });
+                const wui::rect pos_w{ 0, pos.top, act_pos.left, pos.bottom };
+                pluggedWindow->window->set_position(pos_w);
             }
             const auto dx = act_pos.left - prev_pos.left;
             auto pos = createPluggedButton->position();
             auto left = dx + pos.left;
             createPluggedButton->set_position({ left, pos.top, left + pos.width(), pos.bottom });
 
-            left = dx + left + pos.width() + 4;
+            left += pos.width() + 4;
             pos = closePluggedButton->position();
             closePluggedButton->set_position({ left, pos.top, left + pos.width(), pos.bottom });
 
@@ -1104,14 +1080,10 @@ int main(int argc, char *argv[])
             left = dx + pos.left;
             menu_select_text->set_position({ left, pos.top, left + pos.width(), pos.bottom });
 
-            auto wp = window->position();
-            window->redraw({ 0, 0, wp.right, wp.bottom }, true);
+            window->redraw(true);
         });
-    window->add_control(vertSplitter, { 0 });
 
     auto sid = window->subscribe([&](const wui::event &e) {
-        // The main window is already initialized (context and graphics).
-        // Font size and text length calculations are available for add_control(), etc (get_preferred_size(), measure_text(), ...)
         if (e.internal_event_.type == wui::internal_event_type::size_changed
             || e.internal_event_.type == wui::internal_event_type::window_expanded)
         {
@@ -1154,69 +1126,101 @@ int main(int argc, char *argv[])
 
             editButton->set_position({ w - 250, h - 55, w - 150, h - 20 });
             exitButton->set_position({ w - 120, h - 55, w - 20, h - 20 });
+            return;
         }
-        else if (e.internal_event_.type == wui::internal_event_type::window_created)
+
+        if (e.internal_event_.type == wui::internal_event_type::window_created)
         {
-            // linux: X11 thread
-            accountImage->set_position( { 350, 100, 414, 164 });
 
-            int32_t h_text = text0->get_font_size() + 8;
-            text0->set_position( { 320, 190, 890, 190 + h_text });
-            int32_t h_ = 180 + h_text + 30;
+            pluggedWindow->Create();
 
-            h_text = nameInput->get_font_size() + 8;
+            window->add_control(menu, { 0 });
+            window->add_control(menuButton, {});
+            window->add_control(horizProgressBar, {});
+            window->add_control(horizSlider, {});
+            window->add_control(accountImage, {});
+            window->add_control(createPluggedButton, {});
+            window->add_control(closePluggedButton, {});
+            window->add_control(text0, {});
+            window->add_control(nameInput, {});
+            window->add_control(select3, {});
+            window->add_control(editor, {});
+            window->add_control(darkThemeButton, {});
+            window->add_control(whiteThemeButton, {});
+            window->add_control(menu_select_text, {});
+            window->add_control(editButton, {});
+            window->add_control(exitButton, {});
+            window->add_control(vertSplitter, { 0 });
+
+            const auto cap_h = window->caption_height();
+            const auto rect_mb = menuButton->get_preferred_size();
+            const auto top = cap_h + rect_mb.height();
+
+            accountImage->set_position( { 380, 50 + top, 444, 114 + top });
+
+            int32_t h_text = text0->font_line_height() + 8;
+            text0->set_position( { 320, 150 + top, 890, 150 + h_text + top});
+            int32_t h_ = 150 + h_text + top + 20;
+
+            h_text = nameInput->font_line_height() + 8;
             nameInput->set_position( { 320, h_, 890, h_ + h_text });
-            h_ = h_ + h_text + 30;
+            h_ += h_text + 20;
 
             select3->set_position( { 320, h_, 890, h_ + 25 });
+            h_ += 25 + 20;
 
-            editor->set_position( { 320, 400, 890, 500 });
-
-            darkThemeButton->set_position( { 320, 350, 320 + 120, 375 });
+            darkThemeButton->set_position( { 320, h_, 320 + 120, h_ + 25 });
             darkThemeButton->turn(true);
 
-            whiteThemeButton->set_position( { 440 + 20, 350, 440 + 20 + 120, 375 });
+            whiteThemeButton->set_position( { 320 + 120 + 20, h_, 320 + 120 + 20 + 120, h_ + 25 });
+
+            h_ += 25 ;
+            editor->set_position( { 320, h_, 890, h_ + 100 });
 
             menu_select_text->set_position( { 120, 450, 200, 480 });
 
             editButton->set_position( { 240, 450, 350, 480 });
             exitButton->set_position( { 370, 450, 480, 480 });
 
-            const auto cap_h = window->caption_height();
             const auto rect1 = createPluggedButton->get_preferred_size();
             createPluggedButton->set_position( { 320,
-                cap_h + 24, 320 + rect1.width(), cap_h + 24 + rect1.height() + 4 });
+                top + 0, 320 + rect1.width(), top + 0 + rect1.height() + 4 });
 
             auto rect2 = closePluggedButton->get_preferred_size();
             auto left = 320 + rect1.width() + 4;
             auto x_pos = left + rect2.width();
-            closePluggedButton->set_position( { left, cap_h + 24, x_pos,
-                cap_h + 24 + rect2.height() + 4 });
+            closePluggedButton->set_position( { left, top + 0, x_pos,
+                top + 0 + rect2.height() + 4 });
+            const auto y = top + 0 + 4;
+            auto y2 = y + rect2.height() + 20;
 
-            horizProgressBar->set_position({ left, 100, left + rect2.width(), 125 });
-            horizSlider->set_position({ left, 140, left + rect2.width(), 165 });
+            horizProgressBar->set_position({ left, y2, left + rect2.width(), y2 + 25 });
+            y2 += 25 + 10;
+            horizSlider->set_position({ left, y2, left + rect2.width(), y2 + 25 });
 
             x_pos += 10;
-            window->add_control(vertSlider,      { x_pos, cap_h + 24, x_pos + 25, 155 });
+            window->add_control(vertSlider, { x_pos, y + 0, x_pos + 25,  y + 112 });
             x_pos += 40;
-            window->add_control(vertProgressBar, { x_pos, cap_h + 24, x_pos + 25, 155 });
+            window->add_control(vertProgressBar, { x_pos, y + 0, x_pos + 25,  y + 112 });
             x_pos += 25;
 
             if (0 == (wui::focus_mode::always & window->get_focus_mode()))
             {
-                list2->update_columns({ { 30, "##" }, { 62, "day" } });
-                rect2 = list2->get_preferred_size(195 - cap_h - 24); // 0: height max
+                window->add_control(panel2, {});
+                window->add_control(list2, {});
+
+                list2->update_columns({ { 4, "##" }, { 20, "day" } });
+                rect2 = list2->get_preferred_size(195 - top); // 0: height max
 
                 x_pos += 18;
-                window->add_control(panel2, { x_pos - 4, cap_h + 24 - 4,
-                    x_pos + rect2.width() + 4, cap_h + 24 + rect2.height() + 4 });
+                panel2->set_position({ x_pos - 4, top - 4,
+                    x_pos + rect2.width() + 4, top + rect2.height() + 4 });
 
-                window->add_control(list2, { x_pos, cap_h + 24,
-                    x_pos + rect2.width(), cap_h + 24 + rect2.height() });
+                list2->set_position({ x_pos, top,
+                    x_pos + rect2.width(), top + rect2.height() });
                 x_pos += rect2.width();
             }
 
-            const auto rect_mb = menuButton->get_preferred_size();
             x_pos += rect_mb.width() + 2*10;
 
             const auto rc = window->position();
@@ -1224,8 +1228,17 @@ int main(int argc, char *argv[])
             {
                 window->set_position({ rc.left, rc.top, rc.left + x_pos, rc.bottom });
             }
+
+            window->enable_device_change_handling(true);
+            if (pluggedWindow->Init())
+            {
+                createPluggedButton->disable();
+                closePluggedButton->enable();
+            }
+            return;
         }
-        else if (e.internal_event_.type == wui::internal_event_type::user_emitted)
+
+        if (e.internal_event_.type == wui::internal_event_type::user_emitted)
         {
             if (e.internal_event_.x == 5555)
             {
@@ -1246,7 +1259,7 @@ int main(int argc, char *argv[])
     }, wui::event_type::internal);
 
     window->set_control_callback([&](wui::window_control control,
-        std::string &tooltip_text, bool continue_ [[maybe_unused]]) {
+        std::string &tooltip_text, [[maybe_unused]] bool continue_) {
         if (control == wui::window_control::theme)
         {
             auto theme_name = wui::get_default_theme()->get_name();
@@ -1279,14 +1292,33 @@ int main(int argc, char *argv[])
         }
     });
 
+    // Setup input multiline:
+
+    //editor->set_symbols_limit(-1); // unlimited text
+#if 1
+    window->set_focus_mode(wui::focus_mode::react); // input multiline: restore input focus for this
+#else
+    window->set_focus_mode(wui::focus_mode::always); // input multiline: always restore input focus for this
+#endif
+
     window->set_min_size(WND_WIDTH - WND_WIDTH/4, WND_HEIGHT - WND_HEIGHT/4);
 
-    window->init("Hello from WUI!", { -1, -1, WND_WIDTH, WND_HEIGHT },
-        main_window_style, [window]() {});
+//#define USE_THREAD
+#ifdef USE_THREAD
+    // run in the other thread (X11), win32 uses main thread
+    return wui::framework::run([&window]() -> bool {
+        return window->init("Hello from WUI!", { -1, -1, WND_WIDTH, WND_HEIGHT },
+                main_window_style, [window]() {});
+    });
+#else
+    // run in the main thread
+    const bool result = window->init("Hello from WUI!", { -1, -1, WND_WIDTH, WND_HEIGHT },
+         main_window_style, [window]() {});
+    if (!result)
+    {
+        return -1;
+    }
+    return wui::framework::run();
 
-    window->enable_device_change_handling(true);
-
-    wui::framework::run();
-
-    return 0;
+#endif
 }

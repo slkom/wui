@@ -14,14 +14,14 @@ namespace wui
 namespace about
 {
 
-static constexpr const char * name = "libWUI";
-static constexpr const char * full_name = "Window User Interface Library";
-static constexpr const char * version = "1.3.260327";
-static constexpr const char * web = "https://libwui.org";
-static constexpr const char * authors = "Intent Garden Org";
-static constexpr const char * official_repo = "https://github.com/intent-garden/wui";
-static constexpr const char * licence = "Boost Software License, Version 1.0";
+static constexpr const char* name = "libWUI";
+static constexpr const char* full_name = "Window User Interface Library";
+static constexpr const char* version = "1.3.260500 [fork]";
+static constexpr const char* web = "https://libwui.org";
+static constexpr const char* authors = "Intent Garden Org";
+static constexpr const char* official_repo = "https://github.com/intent-garden/wui";
+static constexpr const char* licence = "Boost Software License, Version 1.0";
 
-}
+} // namespace about
 
-}
+} // namespace wui

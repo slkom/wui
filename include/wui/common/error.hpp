@@ -22,7 +22,8 @@ enum class error_type
     invalid_value,
     system_error,
     no_handle,
-    already_started
+    already_started,
+    external_code_error
 };
 
 
@@ -40,7 +41,7 @@ public:
 
     error() = default;
 
-    inline bool operator==(const error &lv)
+    inline bool operator==(const error &lv) const
     {
         return lv.type == type && lv.component == component;
     }

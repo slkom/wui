@@ -25,22 +25,10 @@ scroll::scroll(int32_t area_, int32_t scroll_pos_,
     std::string_view theme_control_name, std::shared_ptr<i_theme> theme__)
     : tcn(theme_control_name),
     theme_(theme__),
-    position_{ 0 },
-    showed_(true), enabled_(true), topmost_(false),
     area(area_),
     scroll_pos(static_cast<double>(scroll_pos_)),
-    prev_scroll_pos(-1.0), // 0.0
-    scroll_interval(1.0),
     orientation_(orientation__),
-    callback(callback_),
-    worker_action_(worker_action::undefined),
-    worker_started(false),
-    worker_done(true),
-    progress(0),
-    scroll_view_(scroll_view::tiny),
-    slider_scrolling(false),
-    slider_click_pos(0),
-    title_height(0)
+    callback(callback_)
 {
 }
 
@@ -54,20 +42,21 @@ scroll::~scroll()
     }
 }
 
-void scroll::draw(graphic &gr, const rect& paint_rect [[maybe_unused]] )
+void scroll::draw(graphic &gr, const rect)
 {
     if (!showed_ || (orientation_ == orientation::vertical
         && position_.height() < full_scrollbar_size * 2)
         || (orientation_ == orientation::horizontal
-            && position_.width() < full_scrollbar_size * 2))
+            && position_.width() < full_scrollbar_size * 2)
+        )
     {
         return;
     }
 
-    rect bar_rect{ }, up_button_rect{ }, down_button_rect{ }, slider_rect{ };
+    rect bar_rect{}, up_button_rect{}, down_button_rect{}, slider_rect{};
     calc_scrollbar_params(&bar_rect, &up_button_rect, &down_button_rect, &slider_rect);
 
-    if (slider_rect.bottom == 0)
+    if (0 == slider_rect.bottom)
     {
         return;
     }
@@ -95,10 +84,11 @@ void scroll::draw(graphic &gr, const rect& paint_rect [[maybe_unused]] )
         }
     }
 
-    gr.draw_rect(slider_rect, theme_color(tcn, scroll_view_ == scroll_view::full ? tv_slider_acive : tv_slider, theme_));
+    gr.draw_rect(slider_rect, theme_color(tcn, scroll_view_ == scroll_view::full ?
+        tv_slider_acive : tv_slider, theme_));
 }
 
-void scroll::set_position(const rect& position__)
+void scroll::set_position(const rect position__)
 {
     position_ = position__;
 
@@ -140,11 +130,12 @@ void scroll::clear_parent()
     if (parent__)
     {
         parent__->unsubscribe(my_control_sid);
-        my_control_sid.clear();
-
         parent__->unsubscribe(my_plain_sid);
-        my_plain_sid.clear();
+        scroll_view_ = scroll_view::tiny;
     }
+    my_control_sid.clear();
+    my_plain_sid.clear();
+
     parent_.reset();
 }
 
@@ -168,7 +159,7 @@ bool scroll::focusing() const
     return false;
 }
 
-error scroll::get_error() const
+error scroll::get_error()
 {
     return {};
 }
@@ -191,6 +182,7 @@ void scroll::update_theme(std::shared_ptr<i_theme> theme__)
 void scroll::show()
 {
     showed_ = true;
+    redraw(true);
 }
 
 void scroll::hide()
@@ -198,6 +190,10 @@ void scroll::hide()
     if (showed_)
     {
         showed_ = false;
+
+        if (position_.is_hide())
+            return;
+
         auto parent__ = parent_.lock();
         if (parent__)
         {
@@ -214,11 +210,13 @@ bool scroll::showed() const
 void scroll::enable()
 {
     enabled_ = true;
+    redraw(true);
 }
 
 void scroll::disable()
 {
     enabled_ = false;
+    redraw(true);
 }
 
 bool scroll::enabled() const
@@ -291,6 +289,7 @@ void scroll::receive_control_events(const event& ev)
                 if (!slider_scrolling)
                 {
                     scroll_view_ = scroll_view::tiny;
+                    redraw(true);
                 }
             break;
             case mouse_event_type::left_down:
@@ -390,7 +389,8 @@ void scroll::receive_plain_events(const event& ev)
                         if (callback)
                             callback(scroll_state::relaxed, static_cast<int32_t>(scroll_pos));
 
-                        redraw();
+                        if (!position_.is_hide())
+                            redraw(true);
                     }
 
                 }
@@ -405,8 +405,8 @@ void scroll::receive_plain_events(const event& ev)
                     scroll_view_ = scroll_view::tiny;
                     if (callback)
                         callback(scroll_state::relaxed, static_cast<int32_t>(scroll_pos));
-
-                    redraw();
+                    if(!position_.is_hide())
+                        redraw(true);
                 }
             break;
         }
@@ -418,72 +418,32 @@ scroll_view scroll::get_scroll_view() const noexcept
     return scroll_view_;
 }
 
-void scroll::draw_arrow_up(graphic& gr, const rect& button_pos)
+void scroll::draw_arrow_up(graphic& gr, const rect button_pos)
 {
-    auto color = get_rgb(theme_color(tcn, tv_slider_acive, theme_));
-
-    constexpr int h = 4;
-    int w = 8;
-
-    for (int j = 0; j < h; ++j)
-    {
-        for (int i = 0; i < w; ++i)
-        {
-            gr.draw_pixel({ button_pos.left + 3 + j + i, button_pos.top + 8 - j }, color);
-        }
-        w -= 2;
-    }
+    const auto color = theme_color(tcn, tv_slider_acive, theme_);
+    static const graphic::point2i pts_up[4]{ { 6, 5 }, { 8, 5 }, { 11, 9 }, { 3, 9 } };
+    gr.fill_path(button_pos, pts_up, 4, color);
 }
 
-void scroll::draw_arrow_left(graphic& gr, const rect& button_pos)
+void scroll::draw_arrow_left(graphic& gr, const rect button_pos)
 {
-    auto color = get_rgb(theme_color(tcn, tv_slider_acive, theme_));
-
-    constexpr int w = 4;
-    int h = 8;
-
-    for (int j = 0; j < w; ++j)
-    {
-        for (int i = 0; i < h; ++i)
-        {
-            gr.draw_pixel({ button_pos.left + 8 - j, button_pos.top + 3 + i + j }, color);
-        }
-        h -= 2;
-    }
+    const auto color = theme_color(tcn, tv_slider_acive, theme_);
+    static const graphic::point2i pts_left[4]{ { 9, 3 }, { 9, 11 }, { 5, 8 }, { 5, 6 } };
+    gr.fill_path(button_pos, pts_left, 4, color);
 }
 
-void scroll::draw_arrow_down(graphic& gr, const rect& button_pos)
+void scroll::draw_arrow_down(graphic& gr, const rect button_pos)
 {
-    auto color = get_rgb(theme_color(tcn, tv_slider_acive, theme_));
-
-    constexpr int h = 4;
-    int w = 8;
-
-    for (int j = 0; j < h; ++j)
-    {
-        for (int i = 0; i < w; ++i)
-        {
-            gr.draw_pixel({ button_pos.left + 3 + j + i, button_pos.top + 5 + j }, color);
-        }
-        w -= 2;
-    }
+    const auto color = theme_color(tcn, tv_slider_acive, theme_);
+    static const graphic::point2i pts_down[4]{ { 3, 5 }, { 11, 5 }, { 8, 9 }, { 6, 9 } };
+    gr.fill_path(button_pos, pts_down, 4, color);
 }
 
-void scroll::draw_arrow_right(graphic& gr, const rect& button_pos)
+void scroll::draw_arrow_right(graphic& gr, const rect button_pos)
 {
-    auto color = get_rgb(theme_color(tcn, tv_slider_acive, theme_));
-
-    constexpr int w = 4;
-    int h = 8;
-
-    for (int j = 0; j < w; ++j)
-    {
-        for (int i = 0; i < h; ++i)
-        {
-            gr.draw_pixel({ button_pos.left + 5 + j, button_pos.top + 3 + i + j }, color);
-        }
-        h -= 2;
-    }
+    const auto color = theme_color(tcn, tv_slider_acive, theme_);
+    static const graphic::point2i pts_right[4]{ { 5, 3 }, { 9, 6 }, { 9, 8 }, { 5, 11 } };
+    gr.fill_path(button_pos, pts_right, 4, color);
 }
 
 void scroll::move_slider(const int32_t v)
@@ -525,18 +485,17 @@ void scroll::move_slider(const int32_t v)
     }
 
     prev_scroll_pos.store(scroll_pos);
-    redraw();
+    redraw_progress();
 }
 
 bool scroll::scroll_up()
 {
-    if (scroll_pos == 0 || scroll_interval <= 0) // < ?
+    if (scroll_pos == 0 || scroll_interval <= 0)
     {
         worker_started = false;
         return false;
     }
 
-    //scroll_pos -= scroll_interval * 10;
     scroll_pos = scroll_pos - scroll_interval * 10; // atomic
     if (scroll_pos < 0)
     {
@@ -545,12 +504,11 @@ bool scroll::scroll_up()
 
     if (callback && prev_scroll_pos != scroll_pos)
     {
-        callback(scroll_pos == 0 ? scroll_state::up_end : scroll_state::moving,
-            static_cast<int32_t>(scroll_pos));
+        callback(scroll_pos == 0 ? scroll_state::up_end : scroll_state::moving, static_cast<int32_t>(scroll_pos));
     }
 
     prev_scroll_pos.store(scroll_pos);
-    redraw();
+    redraw_progress();
     return true;
 }
 
@@ -577,11 +535,12 @@ bool scroll::scroll_down()
     }
 
     prev_scroll_pos.store(scroll_pos);
-    redraw();
+    redraw_progress();
     return true;
 }
 
-void scroll::calc_scrollbar_params(rect* bar_rect, rect* up_button_rect, rect* down_button_rect, rect* slider_rect)
+void scroll::calc_scrollbar_params(rect* bar_rect, rect* up_button_rect, rect* down_button_rect,
+    rect* slider_rect)
 {
     if (orientation_ == orientation::vertical)
     {
@@ -619,7 +578,8 @@ int32_t scroll::get_buttons_size() noexcept
 
 void scroll::calc_vert_scrollbar_params(rect* bar_rect, rect* up_button_rect, rect* down_button_rect, rect* slider_rect)
 {
-    int32_t scrollbar_width = 0;
+    int32_t scrollbar_width;
+
     if (scroll_view_ == scroll_view::tiny)
     {
         scrollbar_width = tiny_scrollbar_size;
@@ -633,18 +593,14 @@ void scroll::calc_vert_scrollbar_params(rect* bar_rect, rect* up_button_rect, re
         return;
     }
 
-    const int32_t SB_WIDTH = scrollbar_width,
-        SB_HEIGHT = full_scrollbar_size, SB_SILDER_MIN_HEIGHT = 5,
-        SB_BUTTON_WIDTH = SB_WIDTH, SB_BUTTON_HEIGHT = SB_HEIGHT;
+    constexpr auto SB_SILDER_MIN_HEIGHT = 5, SB_HEIGHT = full_scrollbar_size,
+        SB_BUTTON_HEIGHT = SB_HEIGHT;
 
-    auto control_pos = get_control_position(position_, parent_);
+    const int32_t SB_WIDTH = scrollbar_width, SB_BUTTON_WIDTH = SB_WIDTH;
+
+    const auto control_pos = get_control_position(position_, parent_);
 
     double client_height = control_pos.height() - (SB_HEIGHT * 2);
-
-    if (scroll_interval <= 0)
-    {
-        return;
-    }
 
     if (bar_rect)
     {
@@ -663,6 +619,11 @@ void scroll::calc_vert_scrollbar_params(rect* bar_rect, rect* up_button_rect, re
 
     if (slider_rect)
     {
+        if (scroll_interval <= 0)
+        {
+            return;
+        }
+
         auto slider_top = control_pos.top + static_cast<int32_t>(std::round(scroll_pos / scroll_interval));
         auto slider_height = static_cast<int32_t>(std::round(client_height / scroll_interval));
 
@@ -670,6 +631,8 @@ void scroll::calc_vert_scrollbar_params(rect* bar_rect, rect* up_button_rect, re
         {
             slider_height = SB_SILDER_MIN_HEIGHT;
         }
+
+        *bar_rect = { control_pos.right - SB_WIDTH, control_pos.top, control_pos.right, control_pos.bottom };
 
         *slider_rect = { control_pos.right - SB_BUTTON_WIDTH,
             SB_HEIGHT + slider_top,
@@ -699,18 +662,13 @@ void scroll::calc_hor_scrollbar_params(rect* bar_rect, rect* up_button_rect, rec
         return;
     }
 
-    const int32_t SB_WIDTH = full_scrollbar_size,
-        SB_SILDER_MIN_WIDTH = 5,
-        SB_BUTTON_WIDTH = SB_WIDTH, SB_BUTTON_HEIGHT = scrollbar_height;//SB_WIDTH;
+    constexpr auto SB_SILDER_MIN_WIDTH = 5, SB_WIDTH = full_scrollbar_size, SB_BUTTON_WIDTH = SB_WIDTH;
+
+    const int32_t SB_BUTTON_HEIGHT = scrollbar_height;
 
     auto control_pos = get_control_position(position_, parent_);
 
     double client_width = control_pos.width() - (SB_WIDTH * 2);
-
-    if (scroll_interval <= 0)
-    {
-        return;
-    }
 
     if (bar_rect)
     {
@@ -729,6 +687,11 @@ void scroll::calc_hor_scrollbar_params(rect* bar_rect, rect* up_button_rect, rec
 
     if (slider_rect)
     {
+        if (scroll_interval <= 0)
+        {
+            return;
+        }
+
         auto slider_left = control_pos.left + static_cast<int32_t>(std::round(scroll_pos / scroll_interval));
         auto slider_width = static_cast<int32_t>(std::round(client_width / scroll_interval));
 
@@ -764,16 +727,25 @@ void scroll::start_work(const worker_action action)
         worker_started = true;
         worker_done = false;
         // work(); // test, no anim.
-        worker = std::thread(std::bind(&scroll::work, this));
+        worker = std::thread(&scroll::work, this);
     }
 }
 
-void scroll::redraw()
+void scroll::redraw(bool clear)
 {
     auto parent__ = parent_.lock();
     if (parent__)
     {
-        auto control_pos = position();
+        parent__->redraw(position(), clear);
+    }
+}
+
+void scroll::redraw_progress()
+{
+    auto parent__ = parent_.lock();
+    if (parent__)
+    {
+        const auto control_pos = position();
         if (orientation_ == orientation::vertical)
             parent__->redraw({ control_pos.right - progress, control_pos.top, control_pos.right, control_pos.bottom });
         else
@@ -799,7 +771,8 @@ void scroll::work()
             if (progress < full_scrollbar_size)
             {
                 progress += 4;
-                redraw();
+                redraw(true); // NB: иначе при быстром перемещении мыши частично перерисовывается
+
             }
             else
             {
@@ -807,8 +780,6 @@ void scroll::work()
                 if (callback)
                 {
                     callback(scroll_state::activated, static_cast<int32_t>(scroll_pos));
-                    // callback() use parent redraw(),
-                    // redraw() происходит не в главном потоке - проблемы?  не наблюдались с atom
                 }
             }
 

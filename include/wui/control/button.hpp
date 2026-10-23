@@ -12,6 +12,7 @@
 #include <wui/graphic/graphic.hpp>
 #include <wui/event/event.hpp>
 #include <wui/common/rect.hpp>
+#include <wui/theme/theme.hpp>
 
 #include <string>
 #include <functional>
@@ -30,7 +31,7 @@ enum class button_view
     image,
     image_right_text,
     image_bottom_text,
-    switcher,
+    switcher, // clear rect
     radio,
     anchor,
     sheet,
@@ -51,9 +52,10 @@ public:
     virtual ~button();
 
     /// i_control impl
-    virtual void draw(graphic &gr, const rect&) override;
+    virtual void draw(graphic &gr, const rect ) override;
+    virtual void redraw(bool clear = false) override;
 
-    virtual void set_position(const rect& position) override;
+    virtual void set_position(const rect position) override;
     [[nodiscard]] virtual rect position() const override;
     virtual void move(const int32_t dx, const int32_t dy) override;
 
@@ -78,9 +80,8 @@ public:
     [[nodiscard]] virtual bool focused() const override;
     [[nodiscard]] virtual bool focusing() const override;
 
-    [[nodiscard]] virtual error get_error() const override;
+    [[nodiscard]] virtual error get_error() override;
 
-public:
     /// Button's interface
     void set_caption(std::string_view caption);
 
@@ -96,15 +97,29 @@ public:
 
     void turn(bool on);
     [[nodiscard]] bool turned() const;
+    /// returns the preferred size
     [[nodiscard]] rect get_preferred_size();
-    [[nodiscard]] int32_t get_font_size() const;
+
+    /// Returns the given font size
+    [[nodiscard]] int32_t get_font_size() const
+    {
+        return theme_font(tcn, tv_font, theme_).size;
+    }
+
+    /// returns recommended distance between the baselines of two adjacent lines of text
+    [[nodiscard]] int32_t font_line_height(int32_t *max_height = nullptr) const
+    {
+        return wui::font_line_height(theme_font(tcn, tv_font, theme_), nullptr, max_height);
+    }
+    /// returns max text height
+    [[nodiscard]] int32_t font_max_height() const
+    {
+        return wui::font_max_height(theme_font(tcn, tv_font, theme_));
+    }
 
     void set_callback(std::function<void(void)> click_callback);
     void set_callback_down(std::function<void(void)> click_callback);
 
-    void redraw();
-
-public:
     /// Possible control names in theme
     static constexpr const char *tc = "button";
     static constexpr const char *tc_tool = "tool_button";
@@ -132,10 +147,11 @@ public:
     static constexpr const char *ti_radio_off = "button_radio_off";
     static constexpr const char *ti_radio_on = "button_radio_on";
 
-    static constexpr int32_t _sheet_bottom_space = 2;
+    static constexpr int32_t _sheet_top_space = 2;
+    static constexpr int32_t _sheet_bottom_space = 3;
     static constexpr int32_t _ident_left = 4;
     static constexpr int32_t _text_width_space = 10;
-    static constexpr int32_t _text_height_space = 6;
+    static constexpr int32_t _text_height_space = 3;
 private:
 
     button_view button_view_;
@@ -159,13 +175,13 @@ private:
     std::weak_ptr<window> parent_;
     std::string my_subscriber_id;
 
-    bool showed_, enabled_, topmost_;
-    bool active_, focused_;
+    bool showed_{true}, enabled_{true}, topmost_{false};
+    bool active_{false}, focused_{false};
     bool focusing_;
 
-    bool pushed;
+    bool pushed{ false };
 
-    bool turned_;
+    bool turned_{ false };
 
     rect text_rect_{};
 

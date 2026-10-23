@@ -21,7 +21,8 @@ std::string error::get_text(error_type t)
         { error_type::invalid_value,  "invalid_value"  },
         { error_type::system_error,   "system_error"   },
         { error_type::no_handle,      "no_handle"      },
-        { error_type::already_started, "already_started" }
+        { error_type::already_started, "already_started" },
+        { error_type::external_code_error, "external_code_error" }
     };
 
     auto n = names.find(t);

@@ -11,6 +11,7 @@
 
 #include <wui/window/window.hpp>
 
+#include <wui/locale/locale.hpp>
 #include <wui/control/image.hpp>
 #include <wui/control/text.hpp>
 #include <wui/control/input.hpp>
@@ -24,18 +25,18 @@ class MainFrame
 public:
     MainFrame();
 
-    void Run();
+    bool Run();
 
 private:
 
-    void ReceiveEvents(const wui::event &ev);
+    void ReceiveEvents(const wui::event& ev);
 
     void UpdateControlsPosition();
-    void UpdateButtonPosition();
+    void UpdateButtonPosition(const int32_t button_h);
 
     void OnOK();
 
-    static constexpr int32_t WND_WIDTH = 320, WND_HEIGHT = 350;
+    static constexpr int32_t WND_WIDTH = 340, WND_HEIGHT = 340;
 
     std::shared_ptr<wui::window> window = std::make_shared<wui::window>();
 
@@ -49,8 +50,7 @@ private:
     std::shared_ptr<wui::input> userNameInput = std::make_shared<wui::input>(std::move(wui::config::get_string("User", "Name", "")));
 
     std::shared_ptr<wui::button> okButton = std::make_shared<wui::button>(
-        wui::locale("main_frame", "ok_button"),
-        std::bind(&MainFrame::OnOK, this));
+        wui::locale("main_frame", "ok_button"), [this]() { OnOK(); });
 
     std::shared_ptr<wui::message> messageBox = std::make_shared<wui::message>(window);
 

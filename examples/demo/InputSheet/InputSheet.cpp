@@ -22,7 +22,9 @@ InputSheet::InputSheet()
     input0(std::make_shared<wui::input>("Type some text here", wui::input_view::multiline))
 {
     input0->set_change_callback([this]() { inputText->set_text(input0->text()); });
-    input0->set_return_callback([this]() { inputText->set_text(input0->text() + "\n\n* You press 'RETURN'..."); });
+    input0->set_return_callback([this]() {
+            inputText->set_text(input0->text() + "\n\n* You press 'RETURN'...");
+        });
 }
 
 void InputSheet::Run(std::weak_ptr<wui::window> parentWindow__)
@@ -35,14 +37,16 @@ void InputSheet::Run(std::weak_ptr<wui::window> parentWindow__)
         auto parentPos = parentWindow->position();
         auto width = parentPos.width(), height = parentPos.height();
 
-        parentWindow->add_control(inputText, { 0 });
-        parentWindow->add_control(input0, { 0 });
+        parentWindow->add_control(inputText, {});
+        parentWindow->add_control(input0, {});
+        //inputText->update_theme();
+        //input0->update_theme();
 
         UpdateSize(width, height);
-    }
 
-    inputText->update_theme();
-    input0->update_theme();
+        inputText->redraw();
+        input0->redraw();
+    }
 }
 
 void InputSheet::End()
@@ -57,6 +61,6 @@ void InputSheet::End()
 
 void InputSheet::UpdateSize(int32_t width, int32_t height)
 {
-    inputText->set_position({ 10, 100, width - 10, height - 240 });
-    input0->set_position({ 10, height - 200, width - 10, height - 10 });
+    inputText->set_position({ 40, 100, width - 40, height - 240 });
+    input0->set_position({ 40, height - 200, width - 40, height - 40 });
 }

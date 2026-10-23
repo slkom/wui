@@ -31,43 +31,43 @@ class image : public i_control, public std::enable_shared_from_this<image>
 {
 public:
 #ifdef _WIN32
-    image(int32_t resource_index, std::shared_ptr<i_theme> theme_ = nullptr);
+    explicit image(int32_t resource_index, std::shared_ptr<i_theme> theme_ = nullptr);
 #endif
-    image(std::string_view file_name, std::shared_ptr<i_theme> theme_ = nullptr);
-    image(const std::vector<uint8_t> &data);
+    explicit image(std::string_view file_name, std::shared_ptr<i_theme> theme_ = nullptr);
+    explicit image(const std::vector<uint8_t> &data);
 
-    virtual ~image();
+    ~image() override;
 
-    virtual void draw(graphic &gr, const rect& ) override;
+    void draw(graphic &gr, const rect ) override;
+    void redraw(bool clear = false) override;
 
-    virtual void set_position(const rect& position) override;
-    [[nodiscard]] virtual std::weak_ptr<window> parent() const override;
-    [[nodiscard]] virtual rect position() const override;
-    virtual void move(const int32_t dx, const int32_t dy) override;
+    void set_position(const rect position) override;
+    [[nodiscard]] std::weak_ptr<window> parent() const override;
+    [[nodiscard]] rect position() const override;
+    void move(const int32_t dx, const int32_t dy) override;
 
-    virtual void set_parent(std::shared_ptr<window> window_) override;
-    virtual void clear_parent() override;
+    void set_parent(std::shared_ptr<window> window_) override;
+    void clear_parent() override;
 
-    virtual void set_topmost(bool yes) noexcept override;
-    [[nodiscard]] virtual bool topmost() const noexcept override;
+    void set_topmost(bool yes) noexcept override;
+    [[nodiscard]] bool topmost() const noexcept override;
 
-    virtual void update_theme_control_name(std::string_view theme_control_name) override;
-    virtual void update_theme(std::shared_ptr<i_theme> theme_ = nullptr) override;
+    void update_theme_control_name(std::string_view theme_control_name) override;
+    void update_theme(std::shared_ptr<i_theme> theme_ = nullptr) override;
 
-    virtual void show() override;
-    virtual void hide() override;
-    [[nodiscard]] virtual bool showed() const override;
+    void show() override;
+    void hide() override;
+    [[nodiscard]] bool showed() const override;
 
-    virtual void enable() override;
-    virtual void disable();
-    [[nodiscard]] virtual bool enabled() const override;
+    void enable() override;
+    void disable() override;
+    [[nodiscard]] bool enabled() const override;
 
-    [[nodiscard]] virtual bool focused() const noexcept override;
-    [[nodiscard]] virtual bool focusing() const noexcept override;
+    [[nodiscard]] bool focused() const noexcept override;
+    [[nodiscard]] bool focusing() const noexcept override;
 
-    [[nodiscard]] virtual error get_error() const override;
+    [[nodiscard]] error get_error() override;
 
-public:
     /// Image's interface
 #ifdef _WIN32
     void change_image(const int32_t resource_index);
@@ -80,9 +80,6 @@ public:
     [[nodiscard]] int32_t width() const;
     [[nodiscard]] int32_t height() const;
 
-    void redraw();
-
-public:
     /// Control name in theme
     static constexpr const char *tc = "image";
 
@@ -93,11 +90,11 @@ public:
 private:
     std::shared_ptr<i_theme> theme_;
 
-    rect position_;
+    rect position_{};
 
     std::weak_ptr<window> parent_;
 
-    bool showed_, enabled_, topmost_;
+    bool showed_{ true }, enabled_{ true }, topmost_{ false };
 
     std::string file_name;
     std::string path_;
@@ -107,10 +104,10 @@ private:
 #ifdef _WIN32
     void init_color_state();
     int32_t resource_index;
-    Gdiplus::Image *img;
+    Gdiplus::Image* img{ nullptr };
     Gdiplus::ImageAttributes attributes_gray;
 #elif __linux__
-    cairo_surface_t *img;
+    cairo_surface_t* img{ nullptr };
 #endif
 
     error err;

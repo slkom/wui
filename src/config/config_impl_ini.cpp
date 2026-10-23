@@ -7,7 +7,7 @@
 //
 
 #include <wui/config/config_impl_ini.hpp>
-#include <wui/system/tools.hpp>
+//#include <wui/system/tools.hpp>
 #include <wui/system/path_tools.hpp>
 #include <wui/system/string_tools.hpp>
 
@@ -21,9 +21,7 @@ namespace config
 {
 
 config_impl_ini::config_impl_ini(std::string_view file_name_)
-    : file_name(std::move(wui::real_path(file_name_))),
-    values(),
-    changed(false)
+    : file_name(std::move(wui::real_path(file_name_)))
 {
     load_values();
 }
@@ -45,10 +43,10 @@ void config_impl_ini::set_int(std::string_view section, std::string_view entry, 
 
 int64_t config_impl_ini::get_int64(std::string_view section, std::string_view entry, int64_t default_)
 {
-    auto s = values.find({ section.data(), entry.data() });
-    if (s != values.end() && s->second.type == value_type::int64)
+    const auto it = values.find({ section.data(), entry.data() });
+    if (it != values.end() && it->second.type == value_type::int64)
     {
-        return s->second.int_val;
+        return it->second.int_val;
     }
     return default_;
 }
@@ -64,10 +62,10 @@ void config_impl_ini::set_int64(std::string_view section, std::string_view entry
 
 std::string config_impl_ini::get_string(std::string_view section, std::string_view entry, std::string_view default_)
 {
-    auto s = values.find({ section.data(), entry.data() });
-    if (s != values.end())
+    const auto it = values.find({ section.data(), entry.data() });
+    if (it != values.end())
     {
-        return s->second.str_val;
+        return it->second.str_val;
     }
     return default_.data();
 }
@@ -83,10 +81,10 @@ void config_impl_ini::set_string(std::string_view section, std::string_view entr
 
 void config_impl_ini::delete_value(std::string_view section, std::string_view entry)
 {
-    auto s = values.find({ section.data(), entry.data() });
-    if (s != values.end())
+    const auto it = values.find({ section.data(), entry.data() });
+    if (it != values.end())
     {
-        values.erase(s);
+        values.erase(it);
     }
 
     changed = true;
@@ -97,7 +95,7 @@ void config_impl_ini::delete_key(std::string_view section)
     (void)section; // TODO: implement
 }
 
-error config_impl_ini::get_error() const
+error config_impl_ini::get_error()
 {
     return err;
 }
@@ -143,7 +141,7 @@ bool config_impl_ini::load_values()
             v.type = value_type::string;
             v.str_val = value;
 
-            if (is_number(value))
+            if (is_digit(value))
             {
                 v.type = value_type::int64;
                 v.str_val = value;

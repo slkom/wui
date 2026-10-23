@@ -144,7 +144,7 @@ void locale_impl::load_locale(const i_locale &locale_)
     strings = static_cast<const locale_impl*>(&locale_)->strings;
 }
 
-error locale_impl::get_error() const
+error locale_impl::get_error()
 {
     return err;
 }

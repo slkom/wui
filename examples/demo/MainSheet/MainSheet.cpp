@@ -15,10 +15,9 @@ MainSheet::MainSheet()
 {
     switcherClip->turn(true);
 
-    auto e = std::move(logoImage->get_error());
-    if (!e.is_ok())
+    if (!logoImage->get_error().is_ok())
     {
-        std::cerr << e.str() << std::endl;
+        std::cerr << logoImage->get_error().str() << std::endl;
     }
 }
 
@@ -35,7 +34,6 @@ void MainSheet::Run(std::weak_ptr<wui::window> parentWindow__)
         parentWindow->add_control(logoImage, { 0 });
         parentWindow->add_control(welcomeText, { 0 });
         parentWindow->add_control(switcherClip, { 0 });
-        parentWindow->add_control(wuiInfoText, { 0 });
 
         parentWindow->add_control(button_inc, { 0 });
         parentWindow->add_control(button_dec, { 0 });
@@ -46,34 +44,37 @@ void MainSheet::Run(std::weak_ptr<wui::window> parentWindow__)
         parentWindow->add_control(wuiCenterText, { 0 });
         parentWindow->add_control(wuiCenterBottomText, { 0 });
 
-        parentWindow->add_control(mainSiteAnchor, { 0 });
-
+        parentWindow->add_control(wuiInfoText, { 0 });
         parentWindow->add_control(vertScroll, { 0 });
         parentWindow->add_control(horScroll,  { 0 });
+        parentWindow->add_control(mainSiteAnchor, { 0 });
+
+        button_inc->set_callback_down([this]() { IncSizeTextRect(); });
+        button_dec->set_callback_down([this]() { DecSizeTextRect(); });
 
         UpdateSize(width, height);
+
+        // UpdateSize() не перерисовывает controls
+        logoImage->redraw();
+        welcomeText->redraw();
+        switcherClip->redraw();
+
+        button_inc->redraw();
+        button_dec->redraw();
+
+        wuiLeftTopText->redraw();
+        wuiTopTopText->redraw();
+        wuiTopCenterText->redraw();
+        wuiCenterText->redraw();
+        wuiCenterBottomText->redraw();
+
+        wuiInfoText->redraw();
+
+        vertScroll->redraw();
+        horScroll->redraw();
+
+        mainSiteAnchor->redraw();
     }
-
-    logoImage->update_theme();
-    welcomeText->update_theme();
-    switcherClip->update_theme();
-    mainSiteAnchor->update_theme();
-    wuiInfoText->update_theme();
-
-    button_inc->update_theme();
-    button_dec->update_theme();
-
-    wuiLeftTopText->update_theme();
-    wuiTopTopText->update_theme();
-    wuiTopCenterText->update_theme();
-    wuiCenterText->update_theme();
-    wuiInfoText->update_theme();
-
-    vertScroll->update_theme();
-    horScroll->update_theme();
-
-    button_inc->set_callback_down([this]() { IncSizeTextRect(); });
-    button_dec->set_callback_down([this]() { DecSizeTextRect(); });
 }
 
 void MainSheet::End()
@@ -84,7 +85,6 @@ void MainSheet::End()
         parentWindow->remove_control(logoImage);
         parentWindow->remove_control(welcomeText);
         parentWindow->remove_control(switcherClip);
-        parentWindow->remove_control(wuiInfoText);
 
         parentWindow->remove_control(button_inc);
         parentWindow->remove_control(button_dec);
@@ -95,16 +95,16 @@ void MainSheet::End()
         parentWindow->remove_control(wuiCenterText);
         parentWindow->remove_control(wuiCenterBottomText);
 
+        parentWindow->remove_control(wuiInfoText);
         parentWindow->remove_control(vertScroll);
         parentWindow->remove_control(horScroll);
-
         parentWindow->remove_control(mainSiteAnchor);
     }
 }
 
 void MainSheet::IncSizeTextRect()
 {
-    if (value_ >= 100)
+    if (value_ >= 10)
         return;
     ++value_;
     redraw();
@@ -112,9 +112,9 @@ void MainSheet::IncSizeTextRect()
 
 void MainSheet::DecSizeTextRect()
 {
-    const int32_t min_dec = -wuiLeftTopText->get_font_size() + 1;
+    const int32_t min_dec = -wuiLeftTopText->font_line_height() + 1;
     if (value_ <= min_dec)
-        return;;
+        return;
     --value_;
     redraw();
 }
@@ -126,7 +126,7 @@ void MainSheet::redraw(const bool top_only_update)
         auto parentPos = parentWindow->position();
         const auto width = parentPos.width(), height = parentPos.height();
         UpdateSize(width, height, top_only_update);
-        parentWindow->redraw({ 0, 0, width, height }, true);
+        parentWindow->redraw(true);
     }
 }
 
@@ -173,7 +173,7 @@ void MainSheet::UpdateSize(const int32_t width, const int32_t height, const bool
         return;
     }
 
-    const int32_t text_line_height = wuiTopTopText->get_font_size() + value_;
+    const int32_t text_line_height = wuiTopTopText->font_line_height() + value_;
     const int32_t text_line_height2 = wuiLeftTopText->get_preferred_size().height() + value_;
 
     const wui::rect switcher_rect = switcherClip->get_preferred_size();
@@ -188,7 +188,7 @@ void MainSheet::UpdateSize(const int32_t width, const int32_t height, const bool
     button_dec->set_position({ left + button_size_w + button_space,
         next_top, left + button_size_w + button_space + button_size_w, next_top + button_size_h });
 
-    const int32_t right_text_demo = left + 200;
+    const int32_t right_text_demo = left + 250;
     next_top += button_size_h + 2 + space;
     wuiLeftTopText->set_position({ left, next_top, right_text_demo, next_top + text_line_height2 });
     next_top += text_line_height2 + space;
@@ -202,18 +202,19 @@ void MainSheet::UpdateSize(const int32_t width, const int32_t height, const bool
 
     const wui::rect butAnchor = mainSiteAnchor->get_preferred_size();
     const int32_t bottom_anchor_height = butAnchor.height();
-    const int32_t bottom_anchor = height - (space + bottom_anchor_height);
+    const int32_t bottom_anchor = height - (2 * space + bottom_anchor_height);
     const int32_t bottom_scroll = bottom_anchor - space - scroll_button_size;
 
     const wui::rect info_rect = wuiInfoText->get_preferred_size();
-    const int32_t bottom_info_height = info_rect.height(); // space + butAnchor
+    const int32_t bottom_info_height = info_rect.height();
     const int32_t bottom_info = bottom_scroll - space - bottom_info_height;
 
     wuiInfoText->set_position({ space, bottom_info, space + info_rect.width(), bottom_info + bottom_info_height });
 
     horScroll->set_position({ space, bottom_scroll, right_scroll, bottom_scroll + scroll_button_size });
 
-    vertScroll->set_position({ width - 50, top + space, right_scroll, bottom_scroll - 1 });
+    const int32_t bottom_vert_scroll = bottom_scroll + scroll_button_size - wui::scroll::full_scrollbar_size;
+    vertScroll->set_position({ width - 50, top + space, right_scroll, bottom_vert_scroll });
 
     mainSiteAnchor->set_position({ space, bottom_anchor, space + butAnchor.width(), bottom_anchor + bottom_anchor_height });
 }

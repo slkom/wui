@@ -31,7 +31,7 @@ enum class device_type
 
     monitor,
     camera,
-    
+
     microphone,
     speaker,
     media,      /// It's microphone or speaker
@@ -50,7 +50,7 @@ struct system_event
 {
     system_event_type type;
     device_type device;
-    
+
     uint64_t w, l;
 };
 

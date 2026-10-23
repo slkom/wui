@@ -29,8 +29,7 @@ namespace wui
 class primitive_container
 {
 public:
-    primitive_container(system_context& context__)
-        : context_(context__)
+    explicit primitive_container(system_context& context__) : context_(context__)
     {}
 
     ~primitive_container();
@@ -38,7 +37,7 @@ public:
     void init();
     void release();
 
-    [[nodiscard]] wui::error get_error() const;
+    [[nodiscard]] wui::error get_error();
 
 #ifdef _WIN32
     [[nodiscard]] HPEN get_pen(const int32_t style, const int32_t width, const color color_);

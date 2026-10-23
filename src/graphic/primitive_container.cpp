@@ -70,7 +70,7 @@ HPEN primitive_container::get_pen(const int32_t style, const int32_t width, cons
     {
         return it->second;
     }
-    auto pen = CreatePen(style, width, get_rgb(color_));
+    auto pen = CreatePen(style, width, get_rgb0(color_));
 
     pens[{ { style, width }, color_ }] = pen;
 
@@ -89,13 +89,15 @@ HBRUSH primitive_container::get_brush(const color color_)
         return it->second;
     }
 
-    auto brush = CreateSolidBrush(get_rgb(color_));
+    auto brush = CreateSolidBrush(get_rgb0(color_));
 
     brushes[color_] = brush;
 
     return brush;
 }
 
+// TODO: font_size = -ScaleDPI(font_.size, dpi_); // -?
+// fscale = (float) g_dpi / USER_DEFAULT_SCREEN_DPI;
 HFONT primitive_container::get_font(const font& font_)
 {
     auto it = fonts.find({ { font_.name, font_.size }, font_.decorations_ });
@@ -105,7 +107,7 @@ HFONT primitive_container::get_font(const font& font_)
     }
 
     LOGFONTW log_font = {
-        font_.size,
+       -font_.size,
         0,
         0,
         0,
@@ -196,8 +198,7 @@ xcb_gcontext_t primitive_container::get_gc(const color color_)
         return -1;
     }
 
-    const auto color__ = conv_rgba_to_bgr(color_);
-    auto it = gcs.find(color__);
+    auto it = gcs.find(color_);
     if (it != gcs.end())
     {
         return it->second;
@@ -206,10 +207,10 @@ xcb_gcontext_t primitive_container::get_gc(const color color_)
     auto gc = xcb_generate_id(context_.connection);
 
     uint32_t mask = XCB_GC_FOREGROUND;
-    uint32_t value[] = { color__ };
+    uint32_t value[] = { conv_to_bgr0(color_) };
     auto gc_create_cookie = xcb_create_gc(context_.connection, gc, context_.wnd, mask, value);
 
-    gcs[color__] = gc;
+    gcs[color_] = gc;
 
     return gc;
 }
@@ -238,11 +239,76 @@ _cairo *primitive_container::get_font(const font& font_, _cairo_surface *surface
         !(font_.decorations_ & decorations::bold) ? CAIRO_FONT_WEIGHT_NORMAL : CAIRO_FONT_WEIGHT_BOLD);
     cairo_set_font_size(cr, font_.size);
 
+#if 1
+    // NB: Текст становится таким же четким как win32 (10, 11 windows)
+    cairo_font_options_t* font_options = cairo_font_options_create();
+    cairo_get_font_options(cr, font_options);
+
+    cairo_font_options_set_antialias(font_options, font_.size < 9 ? CAIRO_ANTIALIAS_GRAY : CAIRO_ANTIALIAS_SUBPIXEL);
+
+
+    // ВАЖНО ДЛЯ DPI:  хинтинг метрик
+    /*
+
+    Что делает Хинтинг метрик (Hint Metrics)
+
+    Хинтинг — это процесс подгонки контуров и размеров букв под физическую пиксельную
+    сетку монитора, чтобы они оставались читаемыми на низких разрешениях.
+    1. При CAIRO_HINT_METRICS_ON (Поведение по умолчанию):
+        • Cairo округляет ширину каждой буквы и межсимвольные интервалы до целых
+            физических пикселей.
+        • Плюс: Вертикальные линии букв (например, у «Ш», «Н», «I») всегда
+            попадают четко в физические пиксели. Буквы получаются максимально контрастными, а размытие по горизонтали сводится к нулю.
+        • Минус: При дробных масштабах (1.25, 1.5) округление до целого
+            пикселя работает грубо. Буквы начинают «плясать»: в одном слове две
+            одинаковые буквы «о» могут иметь разную ширину (одна 7 пикселей, другая 8),
+            а межсимвольные интервалы визуально схлопываются или расширяются.
+            Текст выглядит «дерганым».
+
+        на высоких DPI может делать шрифт избыточно ломаным и неестественным.
+
+    2. При CAIRO_HINT_METRICS_OFF:
+        • Cairo рассчитывает ширину букв и интервалы с субпиксельной точностью
+            (дробные физические пиксели, например, ширина буквы равна 10.43 пикселя).
+        • Плюс: Форма слова и межсимвольные расстояния масштабируются идеально
+            линейно и плавно при любом DPI scale (хоть 1.0, хоть 1.37).
+            Буквы больше не слипаются и не прыгают.
+        • Минус: Так как границы букв теперь могут начинаться на 0.43 физического пикселя,
+            Cairo включает горизонтальное субпиксельное сглаживание (Anti-aliasing).
+            Из-за этого края букв могут казаться более мягкими («размытыми») на низких DPI
+            мониторах по сравнению с жестким хинтингом.
+
+    */
+    // Выключаем жесткую привязку букв к сетке физических пикселей (спасает дробный масштаб)
+    // CAIRO_HINT_METRICS_OFF	Убирает эффект "слипания" или разной толщины букв в словах при масштабе 1.25 / 1.5.
+    cairo_font_options_set_hint_metrics(font_options, CAIRO_HINT_METRICS_OFF);
+
+    // SLIGHT (слабый хинтинг) выравнивает буквы по вертикальной сетке пикселей
+    // (убирая размытие), но позволяет межсимвольным интервалам и ширине букв
+    // слегка варьироваться, что спасает текст от «слипания» при дробном Fractional Scaling.
+
+    // Настройка Хинтинга (Hinting — подгонка контура букв под пиксели)
+    // CAIRO_HINT_STYLE_FULL делает текст максимально контрастным и резким,
+    // что отлично для мелких шрифтов.
+
+    // Если хинтинг в системе не задан, выставляем безопасный SLIGHT
+    if (cairo_font_options_get_hint_style(font_options) == CAIRO_HINT_STYLE_DEFAULT)
+    {
+        // scale <= 1 and 1, 2, 4 ... CAIRO_HINT_STYLE_FULL
+        // (static_cast<int32_t>(scale) == scale) && (scale_int & (scale_int - 1)) == 0
+        cairo_font_options_set_hint_style(font_options, CAIRO_HINT_STYLE_FULL);
+        // DPI scale дробные размеры
+        //cairo_font_options_set_hint_style(font_options, CAIRO_HINT_STYLE_SLIGHT);
+    }
+
+    cairo_set_font_options(cr, font_options);
+    cairo_font_options_destroy(font_options);
+#endif
+
+
 #ifdef _CAIRO_RESIZE_FONT
-    // TODO: решает проблему там, где используется font_.size,
-    // иначе надо добавлять
-    // linux: graphic::get_font_size(font ) { ...; return font_extents.ascent + font_extents.descent;}
-    // win32: graphic::get_font_size(font font_) { return font_.size; }
+    // linux: graphic::get_font_max_h(font ) { ...; return font_extents.ascent + font_extents.descent;}
+    // win32: graphic::get_font_max_h(font font_) { return font_.size; }
 
     cairo_font_extents_t font_extents;
     cairo_font_extents(cr, &font_extents);
@@ -261,7 +327,7 @@ _cairo *primitive_container::get_font(const font& font_, _cairo_surface *surface
 
 #endif
 
-wui::error primitive_container::get_error() const
+wui::error primitive_container::get_error()
 {
     return err;
 }

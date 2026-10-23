@@ -29,7 +29,7 @@
 namespace wui
 {
 
-int32_t calc_items_count(const menu_items_t &items)
+int32_t menu::calc_items_count(const menu_items_t &items)
 {
     int32_t count = 0;
     for (auto &item : items)
@@ -43,7 +43,7 @@ int32_t calc_items_count(const menu_items_t &items)
     return count;
 }
 
-static menu_item *get_item(menu_items_t &items, int32_t n_item, int32_t pos = 0, int32_t level = 0)
+menu_item *menu::get_item(menu_items_t &items, int32_t n_item, int32_t pos, int32_t level)
 {
     int32_t count = pos;
     for (auto &item : items)
@@ -78,15 +78,13 @@ menu::menu(std::string_view theme_control_name, std::shared_ptr<i_theme> theme__
     list_(std::make_shared<list>(list::tc, list_theme)),
     tcn(theme_control_name),
     theme_(theme__),
-    position_{ 0 },
+    position_{},
     indent(0), x(-1), y(-1),
     max_text_width(0), max_hotkey_width(0),
-    item_height_(32),
+    item_height_(default_item_height),
     showed_(false),
     size_updated(false)
 {
-    update_list_theme();
-
     list_->set_draw_callback(std::bind(&menu::draw_list_item, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4));
     list_->set_item_height_callback([this](int32_t, int32_t& h) { h = item_height_; });
     list_->set_item_click_callback([this](list::click_button btn, int32_t n_item, int32_t, int32_t) { if (btn == list::click_button::left) activate_list_item(n_item); });
@@ -104,11 +102,11 @@ menu::~menu()
     }
 }
 
-void menu::draw(graphic &, const rect&)
+void menu::draw(graphic& , const rect )
 {
 }
 
-void menu::set_position(const rect& position__)
+void menu::set_position(const rect position__)
 {
     if (showed_)
     {
@@ -129,16 +127,17 @@ void menu::move(const int32_t dx, const int32_t dy)
     set_position(position_);
 }
 
-void menu::set_parent(std::shared_ptr<window> window)
+void menu::set_parent(std::shared_ptr<window> window_)
 {
-    parent_ = window;
+    parent_ = window_;
 
-    if (window)
+    if (window_)
     {
-        window->add_control(list_, { 0 });
+        window_->add_control(list_, { 0 });
 
-        my_subscriber_id = window->subscribe(std::bind(&menu::receive_event, this, std::placeholders::_1),
+        my_subscriber_id = window_->subscribe(std::bind(&menu::receive_event, this, std::placeholders::_1),
             wui::event_type::mouse | wui::event_type::keyboard);
+        update_theme();
     }
 }
 
@@ -154,7 +153,9 @@ void menu::clear_parent()
     {
         parent__->remove_control(list_);
         parent__->unsubscribe(my_subscriber_id);
+        redraw(true);
     }
+    my_subscriber_id.clear();
 
     parent_.reset();
 }
@@ -237,7 +238,7 @@ bool menu::focusing() const
     return false;
 }
 
-error menu::get_error() const
+error menu::get_error()
 {
     return {};
 }
@@ -298,10 +299,10 @@ void menu::disable()
 
 bool menu::enabled() const
 {
-    return list_->enabled();// true;
+    return list_->enabled();
 }
 
-static void make_items(menu_items_t& items__, const menu_items_t_& items_)
+void menu::make_items(menu_items_t& items__, const menu_items_t_& items_)
 {
     for (auto& i : items_) {
         menu_item item;
@@ -311,9 +312,11 @@ static void make_items(menu_items_t& items__, const menu_items_t_& items_)
     }
 }
 
-void menu::set_items(const menu_items_t_ &items_)
+void menu::set_items(const menu_items_t_ &items_, const bool clear)
 {
     list_->hide();
+    if (clear)
+        items.clear();
     make_items(items, items_);
     list_->set_item_count(calc_items_count(items));
     size_updated = false;
@@ -384,8 +387,8 @@ void menu::update_size()
         {
             continue;
         }
-        const auto text_width = measure_text(item->text, font_, parent__ ? &parent__->get_graphic() : nullptr).right;
-        auto hotkey_width = measure_text(item->hotkey, font_, parent__ ? &parent__->get_graphic() : nullptr).right;
+        const auto text_width = measure_text(item->text, font_, parent__).right;
+        auto hotkey_width = measure_text(item->hotkey, font_, parent__).right;
         if (hotkey_width != 0)
         {
             hotkey_width += item_height_;
@@ -451,7 +454,7 @@ void menu::show_on_control(std::shared_ptr<i_control> control, int32_t indent_, 
             std::min(prev_pos.top, pos.top),
             std::max(prev_pos.right, pos.right),
             std::max(prev_pos.bottom, pos.bottom) };
-        redraw_pos.widen(theme_dimension(tcn, tv_border_width));
+        redraw_pos.widen(theme_dimension(tcn, tv_border_width, theme_));
         parent__->redraw(redraw_pos, true);
     }
 }
@@ -461,24 +464,14 @@ void menu::show_on_point(int32_t x_, int32_t y_)
     show_on_control(nullptr, 0, x_, y_);
 }
 
-void menu::draw_arrow_down(graphic &gr, const rect& pos, const bool expanded)
+void menu::draw_arrow_down(graphic &gr, const rect pos, const bool expanded)
 {
-    auto color = get_rgb(theme_color(tcn, !expanded ? tv_text : tv_scrollbar_slider_acive, theme_));
-
-    constexpr int h = 4;
-    int w = 8;
-
-    for (int j = 0; j < h; ++j)
-    {
-        for (int i = 0; i < w; ++i)
-        {
-            gr.draw_pixel({ pos.left + j + i, pos.top + j }, color);
-        }
-        w -= 2;
-    }
+    const auto color = theme_color(tcn, !expanded ? tv_text : tv_scrollbar_slider_acive, theme_);
+    static const graphic::point2i pts_down[4]{ { 3, 5 }, { 11, 5 }, { 8, 9 }, { 6, 9 } };
+    gr.fill_path(pos, pts_down, 4, color);
 }
 
-void menu::draw_list_item(graphic &gr, const int32_t n_item, const rect& item_rect,
+void menu::draw_list_item(graphic &gr, const int32_t n_item, const rect item_rect,
     const list::item_state state)
 {
     auto item = get_item(items, n_item);
@@ -489,7 +482,7 @@ void menu::draw_list_item(graphic &gr, const int32_t n_item, const rect& item_re
 
     if (state == list::item_state::selected)
     {
-        gr.draw_rect({ item_rect.left, item_rect.top + 2, item_rect.right, item_rect.bottom - 2 },
+       gr.draw_rect({ item_rect.left, item_rect.top + 2, item_rect.right, item_rect.bottom - 2 },
             theme_color(tcn, tv_selected_item));
     }
 
@@ -512,7 +505,7 @@ void menu::draw_list_item(graphic &gr, const int32_t n_item, const rect& item_re
         theme_color(tcn, tv_text) : theme_color(tcn, tv_disabled_text);
     const auto font_ = std::move(theme_font(tcn, tv_font));
 
-    const auto text_height = font_.size;
+    const auto text_height = gr.font_max_height(font_);
 
     gr.draw_text({ item_rect.left + height * (item->level + 1),
         item_rect.top + (height - text_height) / 2 },
@@ -527,10 +520,9 @@ void menu::draw_list_item(graphic &gr, const int32_t n_item, const rect& item_re
 
     if (!item->children.empty())
     {
-        const auto left = item_rect.right - height; //  + (height - 8) / 2
+        const auto left = item_rect.right - height;
         const auto top = item_rect.top + (height - 4) / 2;
-
-        draw_arrow_down(gr, { left, top }, item->state == menu_item_state::expanded);
+        draw_arrow_down(gr, { left, top, left + 14, top + 14}, item->state == menu_item_state::expanded);
     }
 
     if (item->state == menu_item_state::separator
@@ -574,6 +566,20 @@ void menu::activate_list_item(const int32_t n_item)
     if (item->click_callback && item->state != menu_item_state::disabled)
     {
         item->click_callback(item->id);
+    }
+}
+
+void menu::redraw(bool clear)
+{
+    if (showed_)
+    {
+        auto parent__ = parent_.lock();
+        if (parent__)
+        {
+            auto pos = position();
+            pos.widen(theme_dimension(tcn, tv_border_width, theme_));
+            parent__->redraw(pos, clear);
+        }
     }
 }
 

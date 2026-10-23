@@ -35,8 +35,8 @@ MainFrame::MainFrame()
     menuSheet    (std::make_shared<wui::button>(wui::locale("main_frame", "menu_sheet_"),   [this](){ sheet = Sheet::Menu;   UpdateSheets(); }, wui::button_view::sheet)),
     panelSheet   (std::make_shared<wui::button>(wui::locale("main_frame", "other_sheet_"),  [this](){ sheet = Sheet::Others; UpdateSheets(); }, wui::button_view::sheet)),
 
-    accountButton(std::make_shared<wui::button>(wui::locale("main_frame", "account_btn"),   []() {}, wui::button_view::image, IMG_ACCOUNT, 32, wui::button::tc_tool)),
-    menuButton   (std::make_shared<wui::button>(wui::locale("main_frame", "main_menu"),     []() {}, wui::button_view::image_menu, IMG_MENU, 32, wui::button::tc_tool)),
+    accountButton(std::make_shared<wui::button>(wui::locale("main_frame", "account_btn"), nullptr, wui::button_view::image, IMG_ACCOUNT, 32, wui::button::tc_tool)),
+    menuButton   (std::make_shared<wui::button>(wui::locale("main_frame", "main_menu"), nullptr, wui::button_view::image_menu, IMG_MENU, 32, wui::button::tc_tool)),
 
     sheet(Sheet::Main)
 {
@@ -45,13 +45,12 @@ MainFrame::MainFrame()
         std::placeholders::_1),
         wui::event_type::internal | wui::event_type::system | wui::event_type::keyboard);
 
-    window->set_min_size(WND_WIDTH, WND_HEIGHT);
 }
 
-void MainFrame::Run()
+bool MainFrame::Run()
 {
     window->set_control_callback([&](wui::window_control control,
-        std::string &tooltip_text, bool &continue_ [[maybe_unused]]) {
+        std::string &tooltip_text, [[maybe_unused]] bool &continue_) {
         switch (control)
         {
             case wui::window_control::theme:
@@ -78,14 +77,13 @@ void MainFrame::Run()
             break;
         }
 
-        window->update_theme();
     });
 
-    window->init(wui::locale("main_frame", "caption"), { -1, -1, WND_WIDTH, WND_HEIGHT },
+    window->set_min_size(WND_WIDTH - WND_WIDTH / 6, WND_HEIGHT);
+
+    return window->init(wui::locale("main_frame", "caption"), { -1, -1, WND_WIDTH, WND_HEIGHT },
         wui::window_style::frame | wui::window_style::switch_theme_button | wui::window_style::border_all,
         [this]() {});
-
-    UpdateSheets();
 }
 
 void MainFrame::ReceiveEvents(const wui::event &ev)
@@ -95,32 +93,27 @@ void MainFrame::ReceiveEvents(const wui::event &ev)
         switch (ev.internal_event_.type)
         {
             case wui::internal_event_type::window_created:
-                window->add_control(mainSheet, { 0 });
-                window->add_control(windowSheet, { 0 });
-                window->add_control(buttonSheet, { 0 });
-                window->add_control(inputSheet, { 0 });
-                window->add_control(listSheet, { 0 });
-                window->add_control(menuSheet, { 0 });
-                window->add_control(panelSheet, { 0 });
-                window->add_control(accountButton, { 0 });
-                window->add_control(menuButton, { 0 });
+                window->add_control(mainSheet, { });
+                window->add_control(windowSheet, { });
+                window->add_control(buttonSheet, { });
+                window->add_control(inputSheet, { });
+                window->add_control(listSheet, { });
+                window->add_control(menuSheet, { });
+                window->add_control(panelSheet, { });
+                window->add_control(accountButton, { });
+                window->add_control(menuButton, { });
+
+                UpdateSheetsSize();
 
                 UpdateSheets();
             break;
             case wui::internal_event_type::size_changed:
-                if (window->state() == wui::window_state::normal &&
-                    ev.internal_event_.x > 0 && ev.internal_event_.y > 0)
-                {
-                    UpdateSheetsSize();
-                }
-            break;
             case wui::internal_event_type::window_expanded:
                 UpdateSheetsSize();
             break;
             case wui::internal_event_type::window_normalized:
-                UpdateSheetsSize();
             break;
-            case wui::internal_event_type::window_minimized:
+            case wui::internal_event_type::window_minimized: // iconic
             break;
         }
     }
@@ -128,32 +121,71 @@ void MainFrame::ReceiveEvents(const wui::event &ev)
 
 void MainFrame::UpdateSheetsSize()
 {
+    constexpr int32_t ident = 10;
+    constexpr int32_t space = 20;
+
     const auto width = window->position().width(), height = window->position().height();
-    const auto sheet_width = (width - 140) / 7;
+    //const auto sheet_width = (width - 126) / 7;
 
-    int32_t sheets_top = 35;
-    if (window) {
-        sheets_top = window->caption_height() + 2;
-    }
+    const auto sheets_top = window->caption_height() + 2;
 
-    const int32_t sheets_height = mainSheet->get_preferred_size().height();
+    const int32_t sheets_height = mainSheet->font_max_height() + 8;
     mainSheetImpl.set_sheets_height(sheets_height);
-    mainSheet->set_position({ 10, sheets_top, sheet_width, sheets_top + sheets_height });
-    windowSheet->set_position({ 10 * 2 + sheet_width, sheets_top, 10 * 2 + sheet_width * 2, sheets_top + sheets_height });
-    buttonSheet->set_position({ 10 * 3 + sheet_width * 2, sheets_top, 10 * 3 + sheet_width * 3, sheets_top + sheets_height });
-    inputSheet->set_position({ 10 * 4 + sheet_width * 3, sheets_top, 10 * 4 + sheet_width * 4, sheets_top + sheets_height });
-    listSheet->set_position({ 10 * 5 + sheet_width * 4, sheets_top, 10 * 5 + sheet_width * 5, sheets_top + sheets_height });
-    menuSheet->set_position({ 10 * 6 + sheet_width * 5, sheets_top, 10 * 6 + sheet_width * 6, sheets_top + sheets_height });
-    panelSheet->set_position({ 10 * 7 + sheet_width * 6, sheets_top, 10 * 7 + sheet_width * 7, sheets_top + sheets_height });
+
+    auto rc = mainSheet->get_preferred_size();
+    auto sheet_width = rc.width();
+    auto l = ident;
+    mainSheet->set_position({ l, sheets_top, l + sheet_width, sheets_top + sheets_height });
+    l += sheet_width + space;
+    rc = windowSheet->get_preferred_size();
+    sheet_width = rc.width();
+    windowSheet->set_position({ l, sheets_top, l + sheet_width, sheets_top + sheets_height });
+    l += sheet_width + space;
+    rc = buttonSheet->get_preferred_size();
+    sheet_width = rc.width();
+    buttonSheet->set_position({ l, sheets_top, l + sheet_width, sheets_top + sheets_height });
+    l += sheet_width + space;
+    rc = inputSheet->get_preferred_size();
+    sheet_width = rc.width();
+    inputSheet->set_position({ l, sheets_top, l + sheet_width, sheets_top + sheets_height });
+    l += sheet_width + space;
+    rc = listSheet->get_preferred_size();
+    sheet_width = rc.width();
+    listSheet->set_position({ l, sheets_top, l + sheet_width, sheets_top + sheets_height });
+    l += sheet_width + space;
+    rc = menuSheet->get_preferred_size();
+    sheet_width = rc.width();
+    menuSheet->set_position({ l, sheets_top, l + sheet_width, sheets_top + sheets_height });
+    l += sheet_width + space;
+    rc = panelSheet->get_preferred_size();
+    sheet_width = rc.width();
+    panelSheet->set_position({ l, sheets_top, l + sheet_width, sheets_top + sheets_height });
 
     const int32_t button_size = 36;
 
     accountButton->set_position({ width - button_size * 2 - 4, 30, width - button_size - 4, 30 + button_size });
     menuButton->set_position({ width - button_size - 2, 30, width - 2, 30 + button_size });
 
-    mainSheetImpl.UpdateSize(width, height);
-    buttonSheetImpl.UpdateSize(width, height);
-    inputSheetImpl.UpdateSize(width, height);
+    switch (sheet)
+    {
+        case Sheet::Main:
+            mainSheetImpl.UpdateSize(width, height);
+            break;
+        case Sheet::Window:
+            break;
+        case Sheet::Button:
+            buttonSheetImpl.UpdateSize(width, height);
+            break;
+        case Sheet::Input:
+            inputSheetImpl.UpdateSize(width, height);
+            break;
+        case Sheet::List:
+            break;
+        case Sheet::Menu:
+            break;
+        case Sheet::Others:
+            break;
+    }
 }
 
 void MainFrame::UpdateSheets()
@@ -175,7 +207,7 @@ void MainFrame::UpdateSheets()
             inputSheetImpl.End();
 
             mainSheetImpl.Run(window);
-        break;
+            break;
         case Sheet::Window:
             windowSheet->turn(true);
 
@@ -190,7 +222,7 @@ void MainFrame::UpdateSheets()
             inputSheetImpl.End();
 
             buttonSheetImpl.Run(window);
-        break;
+            break;
         case Sheet::Input:
             inputSheet->turn(true);
 

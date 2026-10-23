@@ -12,8 +12,6 @@
 
 #include <wui/window/listener.hpp>
 
-#include <thread>
-
 namespace wui
 {
 
@@ -21,41 +19,65 @@ namespace framework
 {
 extern std::shared_ptr<listener> get_listener();
 
-framework_lin_impl::framework_lin_impl()
-    : started_(false)
-{
-}
-
 // call: main thread
-void framework_lin_impl::run()
+bool framework_lin_impl::run(std::function<bool()> task)
 {
     if (started_)
     {
         err.set(error_type::already_started, "framework_lin_impl::run()");
-        return;
-    }
-
-    started_ = true;
-
-    while (started_)
-    {
-        std::unique_lock<std::mutex> lm{ mtx_cv_ };
-        cv_.wait(lm);
+        return false;
     }
 
     auto listener__ = framework::get_listener();
-    if (listener__)
+    if (!listener__)
     {
-        listener__->stop(); // не обязательно, но помогает отладке
+        return false;
     }
+
+    if (task)
+    {
+        listener__->add_task(task, [this]() { stop(); });
+    }
+
+    started_ = true;
+    listener__->run();
+
+    if (listener__->is_thread())
+    {
+        while (started_)
+        {
+            std::unique_lock<std::mutex> lm{ mtx_cv_ };
+            cv_.wait(lm);
+        }
+        listener__->stop(); // set flag stop and wait exit thread
+    }
+
+    listener__->on_exit(); // clean
+
+    if (!listener__->get_error().is_ok())
+    {
+        err = std::move(listener__->get_error());
+        return false;
+    }
+    return true;
 }
 
-// call: X11 listener::thread
 void framework_lin_impl::stop()
 {
-    std::unique_lock<std::mutex> lm{ mtx_cv_ };
+    if (!started_)
+        return;
+
+    auto listener__ = framework::get_listener();
+    if (!listener__ || listener__->is_thread())
+    {
+        std::unique_lock<std::mutex> lm{ mtx_cv_ };
+        started_ = false;
+        cv_.notify_one(); // event: other thread, set flag started_, exit wait()
+        return;
+    }
+
     started_ = false;
-    cv_.notify_one();
+    listener__->stop(); // event: main thread, set flag
 }
 
 bool framework_lin_impl::started() const
@@ -63,7 +85,7 @@ bool framework_lin_impl::started() const
     return started_;
 }
 
-error framework_lin_impl::get_error() const
+error framework_lin_impl::get_error()
 {
     return err;
 }

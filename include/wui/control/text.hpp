@@ -12,6 +12,7 @@
 #include <wui/graphic/graphic.hpp>
 #include <wui/common/rect.hpp>
 #include <wui/common/alignment.hpp>
+#include <wui/theme/theme.hpp>
 
 #include <string>
 #include <memory>
@@ -46,36 +47,36 @@ protected:
     virtual ~a_text() = 0;
 
 public:
-    virtual void draw(graphic& gr, const rect&) override;
+    void draw(graphic& gr, const rect) override;
+    void redraw(bool clear = false) override;
 
-    virtual void set_position(const rect& position) override;
-    [[nodiscard]] virtual rect position() const override;
-    virtual void move(const int32_t dx, const int32_t dy) override;
+    void set_position(const rect position) override;
+    [[nodiscard]] rect position() const override;
+    void move(const int32_t dx, const int32_t dy) override;
 
-    virtual void set_parent(std::shared_ptr<window> window_) override;
-    [[nodiscard]] virtual std::weak_ptr<window> parent() const override;
-    virtual void clear_parent() override;
+    void set_parent(std::shared_ptr<window> window_) override;
+    [[nodiscard]] std::weak_ptr<window> parent() const override;
+    void clear_parent() override;
 
-    virtual void set_topmost(bool yes) override;
-    [[nodiscard]] virtual bool topmost() const override;
+    void set_topmost(bool yes) override;
+    [[nodiscard]] bool topmost() const override;
 
-    virtual void update_theme_control_name(std::string_view theme_control_name) override;
-    virtual void update_theme(std::shared_ptr<i_theme> theme_ = nullptr) override;
+    void update_theme_control_name(std::string_view theme_control_name) override;
+    void update_theme(std::shared_ptr<i_theme> theme_ = nullptr) override;
 
-    virtual void show() override;
-    virtual void hide() override;
-    [[nodiscard]] virtual bool showed() const override;
+    void show() override;
+    void hide() override;
+    [[nodiscard]] bool showed() const override;
 
-    virtual void enable() override;
-    virtual void disable() override;
-    [[nodiscard]] virtual bool enabled() const override;
+    void enable() override;
+    void disable() override;
+    [[nodiscard]] bool enabled() const override;
 
-    [[nodiscard]] virtual bool focused() const override;
-    [[nodiscard]] virtual bool focusing() const override;
+    [[nodiscard]] bool focused() const override;
+    [[nodiscard]] bool focusing() const override;
 
-    [[nodiscard]] virtual error get_error() const override;
+    [[nodiscard]] error get_error() override;
 
-public:
     /// Text's interface
 
     // избегаем лишних redraw
@@ -106,7 +107,7 @@ public:
     }
 
     template <bool t_redraw = false>
-    void set_text_position(const rect& position)
+    void set_text_position(const rect position)
     {
         position_ = position;
         update_ = true;
@@ -121,11 +122,12 @@ public:
 
     std::string_view get_text() const;
 
-    /// set line spacing coefficient, >= 0.6: spacing = font_height * value
+    /// set line spacing coefficient, >= 1.0: spacing = font_height * value
+    /// default 1.0, CSS 1.2
     void set_space_coeff(const double coeff) noexcept;
 
     /// get default line spacing coefficient
-    [[nodiscard]] constexpr double get_default_space_coeff() noexcept
+    [[nodiscard]] static constexpr double get_default_space_coeff() noexcept
     {
         return _default_space_coeff;
     }
@@ -133,14 +135,21 @@ public:
     /// get line spacing value
     double get_space_coeff() const noexcept;
 
-    /// NB: get_preferred_size() и draw_text() в win32
-    /// дает разные результаты для gdi и gdi+.
-
-    /// возвращает предпочтительный размер текста
+    /// returns the preferred text size
     [[nodiscard]] rect get_preferred_size();
 
-    /// возвращает минимальную высоту строки (высоту шрифта)
-    [[nodiscard]] int32_t get_font_size() const;
+    /// Returns the given font size
+    [[nodiscard]] int32_t get_font_size() const
+    {
+        return theme_font(tcn, tv_font, theme_).size;
+    }
+
+    /// recommended distance between the baselines of two adjacent lines of text
+    [[nodiscard]] int32_t font_line_height()
+    {
+        return static_cast<int32_t>(0.5 + space_coeff_
+            * font_line_height_internal(theme_font(tcn, tv_font, theme_), nullptr, nullptr));
+    }
 
     [[nodiscard]] bool get_clip_state() const noexcept
     {
@@ -154,7 +163,6 @@ public:
         redraw();
     }
 
-public:
     /// Control name in theme
     static constexpr const char* tc = "text";
 
@@ -164,9 +172,11 @@ public:
 
 protected:
 
-    static constexpr double _default_space_coeff = 1.0;
+    static constexpr double _default_space_coeff = 1.0; // 1.2 CSS
 
-    [[nodiscard]] virtual int32_t font_ideal_height(const font& font_, graphic* gr) = 0;
+    /// recommended distance between the baselines of two adjacent lines of text
+    virtual int32_t font_line_height_internal(const font& font_,
+        graphic* gr, int32_t *max_height) = 0;
 
     /// return text width
     [[nodiscard]] virtual int32_t measure_text_line(const std::string& text__,
@@ -178,8 +188,6 @@ protected:
         graphic* gr = nullptr) = 0;
 
     virtual void draw_text(graphic& gr) = 0;
-
-    void redraw();
 
     static void make_lines(const std::string_view text,
         std::vector<std::string>& lines);
@@ -211,7 +219,7 @@ protected:
 
     std::string text_;
 
-    double space_coeff_{ _default_space_coeff }; //! line spacing = font_ideal_height * coefficient
+    double space_coeff_{ _default_space_coeff }; //! line spacing = font_line_height() * coef
 
     hori_alignment hori_alignment_;
     vert_alignment vert_alignment_;
@@ -223,56 +231,60 @@ protected:
 class text : public a_text, public std::enable_shared_from_this<text>
 {
 public:
-    text(std::string_view text__ = "",
-        hori_alignment hori_alignment__ = hori_alignment::left,
-        vert_alignment vert_alignment__ = vert_alignment::center,
-        std::string_view theme_control_name = tc,
-        std::shared_ptr<i_theme> theme__ = nullptr,
-        bool clip__ = false);
-
-    virtual ~text();
-
-protected:
-    [[nodiscard]] virtual int32_t font_ideal_height(const font& font_, graphic* gr) override;
-
-    /// return text width
-    [[nodiscard]] virtual int32_t measure_text_line(const std::string& text__,
-        const font& font__) override;
-
-    /// return text width
-    [[nodiscard]] virtual int32_t truncate_and_measure_text(std::string& text__,
-        const font& font__, const int32_t width__,
-        graphic* gr = nullptr) override;
-
-    virtual void draw_text(graphic& gr) override;
-};
-
-/// support alpha channel and clip
-class text_ex : public a_text, public std::enable_shared_from_this<text_ex>
-{
-public:
-    text_ex(std::string_view text__ = "",
+    explicit text(std::string_view text__ = "",
         hori_alignment hori_alignment__ = hori_alignment::left,
         vert_alignment vert_alignment__ = vert_alignment::center,
         std::string_view theme_control_name = tc,
         std::shared_ptr<i_theme> theme__ = nullptr,
         bool clip__ = true);
 
-    virtual ~text_ex();
+    ~text() override;
 
 protected:
-    [[nodiscard]] virtual int32_t font_ideal_height(const font& font_, graphic* gr) override;
+    /// recommended distance between the baselines of two adjacent lines of text
+    int32_t font_line_height_internal(const font& font_,
+        graphic* gr, int32_t* max_height) override;
 
-    /// return: text width
-    [[nodiscard]] virtual int32_t measure_text_line(const std::string& text__,
+    /// return text width
+    [[nodiscard]] int32_t measure_text_line(const std::string& text__,
         const font& font__) override;
 
-    /// return: text width
-    [[nodiscard]] virtual int32_t truncate_and_measure_text(std::string& text__,
+    /// return text width
+    [[nodiscard]] int32_t truncate_and_measure_text(std::string& text__,
         const font& font__, const int32_t width__,
         graphic* gr = nullptr) override;
 
-    virtual void draw_text(graphic& gr) override;
+    void draw_text(graphic& gr) override;
+};
+
+/// support alpha channel and clip
+class text_ex : public a_text, public std::enable_shared_from_this<text_ex>
+{
+public:
+    explicit text_ex(std::string_view text__ = "",
+        hori_alignment hori_alignment__ = hori_alignment::left,
+        vert_alignment vert_alignment__ = vert_alignment::center,
+        std::string_view theme_control_name = tc,
+        std::shared_ptr<i_theme> theme__ = nullptr,
+        bool clip__ = true);
+
+    ~text_ex() override;
+
+protected:
+    /// recommended distance between the baselines of two adjacent lines of text
+    int32_t font_line_height_internal(const font& font_,
+        graphic* gr, int32_t* max_height) override;
+
+    /// return: text width
+    [[nodiscard]] int32_t measure_text_line(const std::string& text__,
+        const font& font__) override;
+
+    /// return: text width
+    [[nodiscard]] int32_t truncate_and_measure_text(std::string& text__,
+        const font& font__, const int32_t width__,
+        graphic* gr = nullptr) override;
+
+    void draw_text(graphic& gr) override;
 };
 
 }

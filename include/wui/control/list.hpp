@@ -28,39 +28,38 @@ namespace wui
 class list : public i_control, public std::enable_shared_from_this<list>
 {
 public:
-    list(std::string_view theme_control_name = tc, std::shared_ptr<i_theme> theme_ = nullptr);
-    virtual ~list();
+    explicit list(std::string_view theme_control_name = tc, std::shared_ptr<i_theme> theme_ = nullptr);
+    ~list() override;
 
-    virtual void draw(graphic &gr, const rect&) override;
+    void draw(graphic &gr, const rect ) override;
+    void redraw(bool clear = false) override;
 
-    virtual void set_position(const rect& position) override;
-    [[nodiscard]] virtual rect position() const override;
-    virtual void move(const int32_t dx, const int32_t dy) override;
+    void set_position(const rect position) override;
+    [[nodiscard]] rect position() const override;
+    void move(const int32_t dx, const int32_t dy) override;
 
-    virtual void set_parent(std::shared_ptr<window> window_) override;
-    [[nodiscard]] virtual std::weak_ptr<window> parent() const override;
-    virtual void clear_parent();
+    void set_parent(std::shared_ptr<window> window_) override;
+    [[nodiscard]] std::weak_ptr<window> parent() const override;
+    void clear_parent() override;
 
-    virtual void set_topmost(bool yes) override;
-    [[nodiscard]] virtual bool topmost() const override;
+    void set_topmost(bool yes) override;
+    [[nodiscard]] bool topmost() const override;
 
-    virtual void update_theme_control_name(std::string_view theme_control_name) override;
-    virtual void update_theme(std::shared_ptr<i_theme> theme_ = nullptr) override;
+    void update_theme_control_name(std::string_view theme_control_name) override;
+    void update_theme(std::shared_ptr<i_theme> theme_ = nullptr) override;
 
-    virtual void show() override;
-    virtual void hide() override;
-    [[nodiscard]] virtual bool showed() const override;
+    void show() override;
+    void hide() override;
+    [[nodiscard]] bool showed() const override;
 
-    virtual void enable() override;
-    virtual void disable() override;
-    [[nodiscard]] virtual bool enabled() const override;
+    void enable() override;
+    void disable() override;
+    [[nodiscard]] bool enabled() const override;
 
-    [[nodiscard]] virtual bool focused() const override;
-    [[nodiscard]] virtual bool focusing() const override;
+    [[nodiscard]] bool focused() const override;
+    [[nodiscard]] bool focusing() const override;
 
-    [[nodiscard]] virtual error get_error() const override;
-
-public:
+    [[nodiscard]] error get_error() override;
 
     /// List's interface
     struct column
@@ -101,16 +100,26 @@ public:
     void scroll_to_end();
 
     [[nodiscard]] int32_t get_item_top(int32_t n_item) const;
-    [[nodiscard]] int32_t get_font_size() const;
-    /// возвращает предпочтительный размер, (height = 0) calc max height
+
+    /// Returns the given font size
+    [[nodiscard]] int32_t get_font_size() const
+    {
+        return theme_data_.font_.size;
+    }
+
+    /// recommended distance between the baselines of two adjacent lines of text
+    [[nodiscard]] int32_t font_line_height() const
+    {
+        return theme_data_.font_line_height;
+    }
+
+    /// returns the preferred size, if height = 0: calc max height
     [[nodiscard]] rect get_preferred_size(const int32_t height = 0);
 
     void set_keyboard_auto_select(const bool auto_select) noexcept
     {
         keyboard_auto_select = auto_select;
     }
-
-    void redraw();
 
     enum class item_state
     {
@@ -126,10 +135,7 @@ public:
         right
     };
 
-    //NB: для совместимости (если важно?) можно оставить `const rect`.
-    // Если используется std::bind(), вызов не замечает разницы так как forward() использует `&&` ...
-    //void set_draw_callback(std::function<void(graphic&, int32_t nItem, const rect, item_state)> draw_callback_) noexcept;
-    void set_draw_callback(std::function<void(graphic&, int32_t nItem, const rect&, item_state)> draw_callback_) noexcept;
+    void set_draw_callback(std::function<void(graphic&, int32_t nItem, const rect , item_state)> draw_callback_) noexcept;
     void set_item_height_callback(std::function<void(int32_t nItem, int32_t& height)> item_height_callback_) noexcept;
     void set_item_click_callback(std::function<void(click_button, int32_t nItem, int32_t x, int32_t y)> item_click_callback_) noexcept;
     void set_item_change_callback(std::function<void(int32_t nItem)> item_change_callback_) noexcept;
@@ -137,7 +143,6 @@ public:
     void set_column_click_callback(std::function<void(int32_t column)> column_click_callback_) noexcept;
     void set_scroll_callback(std::function<void(scroll_state, int32_t v)> scroll_callback_) noexcept;
 
-public:
     /// Control name in theme
     static constexpr const char *tc = "list";
 
@@ -173,10 +178,12 @@ public:
         color title_text{ make_color(0, 0, 0, 0) };
         color selected_item{ make_color(0, 0, 0, 0) };
         color active_item{ make_color(0, 0, 0, 0) };
-        int32_t border_width{ };
-        int32_t border_item{ };
-        int32_t item_indent{ };
-        int32_t round{ };
+        int32_t border_width{};
+        int32_t border_item{};
+        int32_t item_indent{};
+        int32_t round{};
+        int32_t font_max_height{};
+        int32_t font_line_height{};
         font font_;
     };
 
@@ -218,7 +225,7 @@ private:
     std::shared_ptr<scroll> vert_scroll;
 
     // TODO: int64_t n_item
-    std::function<void(graphic&, int32_t, const rect&, item_state)> draw_callback;
+    std::function<void(graphic&, int32_t, const rect, item_state)> draw_callback;
     std::function<void(int32_t, int32_t&)> item_height_callback;
     std::function<void(click_button, int32_t, int32_t, int32_t)> item_click_callback;
     std::function<void(int32_t)> item_change_callback;
@@ -253,10 +260,7 @@ private:
     // Management for performance
     void update_theme_data();
 
-    // подходит для не перекрывающихся control, не используется...
-    //[[nodiscard]] color get_background_color() const;
-
-    [[nodiscard]] bool update_mem_gr();
+    [[nodiscard]] bool update_mem_gr(graphic& gr);
 };
 
 }

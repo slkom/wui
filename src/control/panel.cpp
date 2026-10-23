@@ -13,24 +13,21 @@
 #include <wui/theme/theme.hpp>
 
 #include <wui/system/tools.hpp>
-#include <assert.h>
+#include <cassert>
 
 namespace wui
 {
 
 panel::panel(std::string_view theme_control_name, std::shared_ptr<i_theme> theme__)
     : tcn(theme_control_name),
-    theme_(theme__),
-    position_{ 0 },
-    showed_(true), topmost_(false)
+    theme_(std::move(theme__))
 {
 }
 
-panel::panel(std::function<void(graphic&)> draw_callback_, std::string_view theme_control_name, std::shared_ptr<i_theme> theme__)
+panel::panel(std::function<void(graphic&)> draw_callback_, std::string_view theme_control_name,
+    std::shared_ptr<i_theme> theme__)
     : tcn(theme_control_name),
-    theme_(theme__),
-    position_{ 0 },
-    showed_(true), topmost_(false),
+    theme_(std::move(theme__)),
     draw_callback(draw_callback_)
 {
 }
@@ -58,7 +55,7 @@ void panel::add_control(std::shared_ptr<i_control> control)
     }
 }
 
-void panel::draw(graphic &gr, const rect&)
+void panel::draw(graphic &gr, const rect)
 {
     if (!showed_ || position_.is_null())
     {
@@ -73,7 +70,7 @@ void panel::draw(graphic &gr, const rect&)
     }
 }
 
-void panel::set_position(const rect& position__)
+void panel::set_position(const rect position__)
 {
     const auto dx = position_.left - position__.left;
     const auto dy = position_.top - position__.top;
@@ -107,6 +104,7 @@ std::weak_ptr<window> panel::parent() const
 
 void panel::clear_parent()
 {
+    redraw(true);
     parent_.reset();
 }
 
@@ -130,7 +128,7 @@ bool panel::focusing() const
     return false;
 }
 
-error panel::get_error() const
+error panel::get_error()
 {
     return {};
 }
@@ -148,19 +146,20 @@ void panel::update_theme(std::shared_ptr<i_theme> theme__)
         return;
     }
     theme_ = theme__;
-
-    redraw();
 }
 
 void panel::show()
 {
     showed_ = true;
-    redraw();
+    redraw(true);
 }
 
 void panel::hide()
 {
     showed_ = false;
+    if (position_.is_hide())
+        return;
+
     auto parent__ = parent_.lock();
     if (parent__)
     {
@@ -186,14 +185,14 @@ bool panel::enabled() const
     return true;
 }
 
-void panel::redraw()
+void panel::redraw(bool clear)
 {
     if (showed_)
     {
         auto parent__ = parent_.lock();
         if (parent__)
         {
-            parent__->redraw(position());
+            parent__->redraw(position(), clear);
         }
     }
 }

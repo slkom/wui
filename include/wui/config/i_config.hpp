@@ -34,7 +34,7 @@ public:
 
     virtual void delete_key(std::string_view section) = 0;
 
-    virtual error get_error() const = 0;
+    virtual error get_error() = 0;
 
     virtual ~i_config() {}
 };

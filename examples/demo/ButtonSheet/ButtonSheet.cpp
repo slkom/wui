@@ -40,10 +40,9 @@ ButtonSheet::ButtonSheet()
     radioButton0->turn(true);
     sheetButton0->turn(true);
 
-    auto e = std::move(imageButton->get_error());
-    if (!e.is_ok())
+    if (!imageButton->get_error().is_ok())
     {
-        std::cerr << e.str() << std::endl;
+        std::cerr << imageButton->get_error().str() << std::endl;
     }
 }
 
@@ -78,78 +77,50 @@ void ButtonSheet::SetDisableButtons(bool disable)
     radioButton1->enable();
     anchorButton->enable();
 }
+
 void ButtonSheet::Run(std::weak_ptr<wui::window> parentWindow__)
 {
     parentWindow_ = parentWindow__;
 
     auto parentWindow = parentWindow_.lock();
-    sheetButton0->update_theme();
-    sheetButton1->update_theme();
-    buttonsText->update_theme();
-    simpleButton0->update_theme();
-    simpleButton1->update_theme();
-    imageButton->update_theme();
-    imageRightTextButton->update_theme();
-    imageBottomTextButton->update_theme();
-    switcherButton1->update_theme();
-    switcherButton2->update_theme();
-    radioButton0->update_theme();
-    radioButton1->update_theme();
-    anchorButton->update_theme();
-
     if (parentWindow)
     {
-        constexpr int32_t space = 25;
+        parentWindow->add_control(buttonsText, {});
+        parentWindow->add_control(switcherButton2, {});
+        parentWindow->add_control(simpleButton0, {});
+        parentWindow->add_control(simpleButton1, {});
+        parentWindow->add_control(imageButton, {});
+        parentWindow->add_control(imageRightTextButton, {});
+        parentWindow->add_control(imageBottomTextButton, {});
+        parentWindow->add_control(switcherButton1, {});
+        parentWindow->add_control(radioButton0, {});
+        parentWindow->add_control(radioButton1, {});
+        parentWindow->add_control(anchorButton, {});
+        parentWindow->add_control(sheetButton0, {});
+        parentWindow->add_control(sheetButton1, {});
+
         const auto parentPos = parentWindow->position();
-        const auto width = parentPos.width();
+        UpdateSize(parentPos.width(), parentPos.height());
 
-        int32_t top = 80;
-        const int32_t text_height = buttonsText->get_preferred_size().height(); // -10 test clip on/off
-        parentWindow->add_control(buttonsText, { 10, top, width - 10, top + text_height });
-        top += text_height + space;
-
-        wui::rect r = switcherButton2->get_preferred_size();
-        parentWindow->add_control(switcherButton2, { 10, top, 10 + r.width(), top + r.height() });
-        top += r.height() + space;
-
-        r = simpleButton0->get_preferred_size();
-        parentWindow->add_control(simpleButton0, { 10, top, 10 + r.width(), top + r.height() });
-        wui::rect r1 = simpleButton1->get_preferred_size();
-        parentWindow->add_control(simpleButton1, { 20 + r.width(), top, 20 + r.width() + r1.width(), top + r1.height() });
-        top += r1.height() + space;
-
-        r = imageButton->get_preferred_size();
-        r1 = imageRightTextButton->get_preferred_size();
-        const auto h = std::max(r.height(), r1.height());
-        const auto h_image = std::max(r.width(), h);
-        parentWindow->add_control(imageButton, { 10, top, 10 + h_image, top + h });
-        parentWindow->add_control(imageRightTextButton, { 20 + h_image, top, 20 + h_image + r1.width(), top + h });
-        top += h + space;
-
-        r = imageBottomTextButton->get_preferred_size();
-        parentWindow->add_control(imageBottomTextButton, { 10, top, 10 + r.width(), top + r.height() });
-        top += r.height() + space;
-
-        r = switcherButton1->get_preferred_size();
-        parentWindow->add_control(switcherButton1, { 10, top, 10 + r.width(), top + r.height() });
-        top += r.height() + 20;
-
-        r = radioButton0->get_preferred_size();
-        parentWindow->add_control(radioButton0, { 10, top, 10 + r.width(), top + r.height() });
-        r1 = radioButton1->get_preferred_size();
-        parentWindow->add_control(radioButton1, { 10 + 10 + r.width(), top, 10 + 10 + r.width() + r1.width(), top + r1.height() });
-        top += r.height() + 20;
-
-        r = anchorButton->get_preferred_size();
-        parentWindow->add_control(anchorButton, { 10, top, 10 + r.width(), top + r.height() });
-        top += r.height() + 20;
-
-        r = sheetButton1->get_preferred_size();
-        parentWindow->add_control(sheetButton0, { 10, top, 10 + r.width(), top + r.height() });
-        r1 = sheetButton1->get_preferred_size();
-        parentWindow->add_control(sheetButton1, { 10 + 10 + r.width(), top, 10 + 10 + r.width() + r1.width(), top + r1.height() });
+        // UpdateSize() не перерисовывает controls
+#if 1
+        sheetButton0->redraw();
+        sheetButton1->redraw();
+        buttonsText->redraw();
+        simpleButton0->redraw();
+        simpleButton1->redraw();
+        imageButton->redraw();
+        imageRightTextButton->redraw();
+        imageBottomTextButton->redraw();
+        switcherButton1->redraw();
+        switcherButton2->redraw();
+        radioButton0->redraw();
+        radioButton1->redraw();
+        anchorButton->redraw();
+#else
+        parentWindow->redraw(); // clear = true for all sheet, text etc
+#endif
     }
-
 }
 
 void ButtonSheet::End()
@@ -173,6 +144,54 @@ void ButtonSheet::End()
     }
 }
 
-void ButtonSheet::UpdateSize(int32_t width [[maybe_unused]], int32_t height [[maybe_unused]] )
+void ButtonSheet::UpdateSize(int32_t width , int32_t height)
 {
+    constexpr int32_t space = 15;
+
+    int32_t top = 80;
+    const int32_t text_height = buttonsText->get_preferred_size().height(); // -10 test clip on/off
+    buttonsText->set_position({ 10, top, width - 10, top + text_height });
+    top += text_height + space;
+
+    wui::rect r = switcherButton2->get_preferred_size();
+    switcherButton2->set_position({ 10, top, 10 + r.width(), top + r.height() });
+    top += r.height() + space;
+
+    r = simpleButton0->get_preferred_size();
+    simpleButton0->set_position({ 10, top, 10 + r.width(), top + r.height() });
+    wui::rect r1 = simpleButton1->get_preferred_size();
+    simpleButton1->set_position({ 20 + r.width(), top, 20 + r.width() + r1.width(), top + r1.height() });
+    top += r1.height() + space;
+
+    r = imageButton->get_preferred_size();
+    r1 = imageRightTextButton->get_preferred_size();
+    const auto h = std::max(r.height(), r1.height());
+    const auto h_image = std::max(r.width(), h);
+    imageButton->set_position({ 10, top, 10 + h_image, top + h });
+    imageRightTextButton->set_position({ 20 + h_image, top, 20 + h_image + r1.width(), top + h });
+    top += h + space;
+
+    r = imageBottomTextButton->get_preferred_size();
+//    imageBottomTextButton->set_position({ 10, top, 10 + r.width(), top + r.height() });
+    imageBottomTextButton->set_position({ 10, top, width - 10, top + r.height() });
+    top += r.height() + space;
+
+    r = switcherButton1->get_preferred_size();
+    switcherButton1->set_position({ 10, top, 10 + r.width(), top + r.height() });
+    top += r.height() + space;
+
+    r = radioButton0->get_preferred_size();
+    radioButton0->set_position({ 10, top, 10 + r.width(), top + r.height() });
+    r1 = radioButton1->get_preferred_size();
+    radioButton1->set_position({ 10 + 20 + r.width(), top, 10 + 20 + r.width() + r1.width(), top + r1.height() });
+    top += r.height() + space;
+
+    r = anchorButton->get_preferred_size();
+    anchorButton->set_position({ 10, top, 10 + r.width(), top + r.height() });
+    top += r.height() + 20;
+
+    r = sheetButton0->get_preferred_size();
+    sheetButton0->set_position({ 10, top, 10 + r.width(), top + r.height() });
+    r1 = sheetButton1->get_preferred_size();
+    sheetButton1->set_position({ 10 + 10 + r.width(), top, 10 + 10 + r.width() + r1.width(), top + r1.height() });
 }

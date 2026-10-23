@@ -21,12 +21,12 @@ struct locale_params
     std::string file_name;
     int32_t resource_id;
 
-    inline bool operator==(const locale_params &lv)
+    inline bool operator==(const locale_params &lv) const noexcept
     {
         return type == lv.type;
     }
 
-    inline bool operator==(locale_type lt)
+    inline bool operator==(locale_type lt) const noexcept
     {
         return type == lt;
     }

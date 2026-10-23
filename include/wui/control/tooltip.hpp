@@ -23,47 +23,44 @@ namespace wui
 class tooltip : public i_control, public std::enable_shared_from_this<tooltip>
 {
 public:
-    tooltip(std::string_view text, std::string_view theme_control_name = tc, std::shared_ptr<i_theme> theme_ = nullptr);
-    virtual ~tooltip();
+    explicit tooltip(std::string_view text, std::string_view theme_control_name = tc, std::shared_ptr<i_theme> theme_ = nullptr);
+    ~tooltip() override;
 
-    virtual void draw(graphic &gr, const rect& ) override;
+    void draw(graphic &gr, const rect ) override;
+    void redraw(bool clear = false) override;
 
-    virtual void set_position(const rect& position) override;
+    void set_position(const rect position) override;
     [[nodiscard]] virtual rect position() const override;
-    virtual void move(const int32_t dx, const int32_t dy) override;
+    void move(const int32_t dx, const int32_t dy) override;
 
-    virtual void set_parent(std::shared_ptr<window> window_) override;
-    [[nodiscard]] virtual std::weak_ptr<window> parent() const override;
-    virtual void clear_parent();
+    void set_parent(std::shared_ptr<window> window_) override;
+    [[nodiscard]] std::weak_ptr<window> parent() const override;
+    void clear_parent() override;
 
-    virtual void set_topmost(bool) override;
-    [[nodiscard]] virtual bool topmost() const override;
+    void set_topmost(bool) override;
+    [[nodiscard]] bool topmost() const override;
 
-    virtual void update_theme_control_name(std::string_view theme_control_name) override;
-    virtual void update_theme(std::shared_ptr<i_theme> theme_ = nullptr) override;
+    void update_theme_control_name(std::string_view theme_control_name) override;
+    void update_theme(std::shared_ptr<i_theme> theme_ = nullptr) override;
 
-    virtual void show() override;
-    virtual void hide() override;
+    void show() override;
+    void hide() override;
     [[nodiscard]] virtual bool showed() const override;
 
-    virtual void enable() override;
-    virtual void disable() override;
-    [[nodiscard]] virtual bool enabled() const override;
+    void enable() override;
+    void disable() override;
+    [[nodiscard]] bool enabled() const override;
 
-    [[nodiscard]] virtual bool focused() const override;
-    [[nodiscard]] virtual bool focusing() const override;
+    [[nodiscard]] bool focused() const override;
+    [[nodiscard]] bool focusing() const override;
 
-    [[nodiscard]] virtual error get_error() const override;
+    [[nodiscard]] error get_error() override;
 
-public:
     /// Tooltip's interface
     void show_on_control(i_control &control, int32_t indent);
 
     void set_text(std::string_view text_);
 
-    void redraw();
-
-public:
     /// Control name in theme
     static constexpr const char *tc = "tooltip";
 
@@ -82,11 +79,11 @@ private:
 
     std::string text;
 
-    rect position_;
+    rect position_{};
 
     std::weak_ptr<window> parent_;
 
-    bool showed_;
+    bool showed_{ false };
 
     void update_size();
 

@@ -36,7 +36,7 @@ namespace wui
 
 #ifdef _WIN32
 
-void set_cursor(system_context *context [[maybe_unused]], const cursor cursor_)
+void set_cursor([[maybe_unused]] system_context *context, const cursor cursor_)
 {
     if (cursor_ == detail::cursor_state::_cursor)
     {
@@ -168,7 +168,7 @@ void line_up_left_right(rect &pos, const int32_t width, const int32_t space)
     pos.right = pos.left + width;
 }
 
-rect get_control_position(const rect& control_position, std::weak_ptr<window> parent)
+rect get_control_position(const rect control_position, std::weak_ptr<window> parent)
 {
     auto out_pos = control_position;
 
@@ -183,8 +183,8 @@ rect get_control_position(const rect& control_position, std::weak_ptr<window> pa
     return out_pos;
 }
 
-rect get_popup_position(std::weak_ptr<window> parent, const rect& base_position,
-    const rect& popup_control_position, const int32_t indent)
+rect get_popup_position(std::weak_ptr<window> parent, const rect base_position,
+    const rect popup_control_position, const int32_t indent)
 {
     auto parent_ = parent.lock();
     if (!parent_)
@@ -316,20 +316,21 @@ namespace
     }
 }
 
-void truncate_line(std::string& text, graphic* gr, const font& f,
+int32_t truncate_line(std::string& text, graphic* gr, const font& f,
     const int32_t max_width, std::string_view ellipsis)
 {
     // 0. Does it fit yet?
-    if (measure_text_direct(text, f, gr).width() <= max_width)
+    const auto with_act = measure_text(text, f, gr).width(); // measure_text_direct
+    if (with_act <= max_width)
     {
-        return;
+        return with_act;
     }
 
-    const int32_t ell_w = measure_text_direct(ellipsis, f, gr).width();
+    const int32_t ell_w = measure_text(ellipsis, f, gr).width();
     if (ell_w > max_width)
     {
         text.clear();
-        return;
+        return 0;
     }
 
     // 1. Exponential acceleration: find "hi" where width > max_width
@@ -337,7 +338,8 @@ void truncate_line(std::string& text, graphic* gr, const font& f,
     std::size_t hi = 1;
     const std::size_t n = text.size();
 
-    while (hi < n) {
+    while (hi < n)
+    {
         const std::size_t cut = safe_utf8_cut(text, hi);
         if (cut == lo)
         {
@@ -354,25 +356,33 @@ void truncate_line(std::string& text, graphic* gr, const font& f,
     }
     hi = std::max<std::size_t>(hi, lo + 1);   // guarantee hi > lo
 
+    //TODO: проверить четный нечетный случай
     // 2. Binary search in [lo, hi)
-    while (hi - lo > 1) {
+    while (hi - lo > 1)
+    {
         const std::size_t mid = (lo + hi) / 2;
         const std::size_t cut = safe_utf8_cut(text, mid);
         if (cut == lo)
         {
-            hi = lo + 1;
+            //hi = lo + 1;
             break; // no progress
         }
 
         const int32_t w = measure_text(std::string_view(text.data(), cut), f, gr).width() + ell_w;
-        (w <= max_width) ? lo = cut : hi = cut;
+        if (w <= max_width)
+            lo = cut;
+        else
+            hi = cut;
     }
 
     // 3. Result
-    if (lo < text.size()) {
+    if (lo < text.size())
+    {
         text.resize(lo);
         text.append(ellipsis);
+        return measure_text(text.data(), f, gr).width();
     }
+    return with_act;
 }
 
 #ifdef _WIN32

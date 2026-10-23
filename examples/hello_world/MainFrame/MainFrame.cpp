@@ -15,7 +15,7 @@
 #include <wui/locale/locale.hpp>
 #include <wui/locale/locale_selector.hpp>
 
-#include <wui/framework/framework.hpp>
+//#include <wui/framework/framework.hpp>
 
 #include <wui/system/tools.hpp>
 
@@ -25,15 +25,13 @@
 
 MainFrame::MainFrame()
 {
-    window->subscribe(std::bind(&MainFrame::ReceiveEvents,
-        this,
-        std::placeholders::_1),
+    window->subscribe([this](const wui::event& ev) { ReceiveEvents(ev); },
         wui::event_type::internal | wui::event_type::system | wui::event_type::keyboard);
 
     window->set_min_size(WND_WIDTH, WND_HEIGHT);
 }
 
-void MainFrame::Run()
+bool MainFrame::Run()
 {
     window->set_control_callback([&](wui::window_control control, std::string& tooltip_text, bool& continue_)
         {
@@ -57,7 +55,7 @@ void MainFrame::Run()
 
                     tooltip_text = wui::locale("window", nextTheme == "dark" ?
                         wui::window::cl_light_theme : wui::window::cl_dark_theme);
-                    UpdateButtonPosition();
+                    UpdateControlsPosition();
                     okButton->redraw();
                 }
                 break;
@@ -80,7 +78,7 @@ void MainFrame::Run()
                     window->set_caption(wui::locale("main_frame", "caption"));
                     whatsYourNameText->set_text(wui::locale("main_frame", "whats_your_name_text"));
                     okButton->set_caption(wui::locale("main_frame", "ok_button"));
-                    UpdateButtonPosition();
+                    UpdateControlsPosition();
                     okButton->redraw();
                 }
                 break;
@@ -96,6 +94,8 @@ void MainFrame::Run()
                             {
                                 if (r == wui::message_result::yes)
                                 {
+                                    wui::config::set_int("MainFrame", "Width", window->position().width());
+                                    wui::config::set_int("MainFrame", "Height", window->position().height());
                                     user_approve_close = true;
                                     window->close();
                                 }
@@ -108,12 +108,25 @@ void MainFrame::Run()
     const auto width = wui::config::get_int("MainFrame", "Width", WND_WIDTH);
     const auto height = wui::config::get_int("MainFrame", "Height", WND_HEIGHT);
 
-    window->init(wui::locale("main_frame", "caption"), { -1, -1, width, height },
+#if 1
+    // This example shows a dialog, then we show the main window.
+    window->hide();
+    const auto ret = window->init(wui::locale("main_frame", "caption"), { -1, -1, width, height },
         wui::window_style::frame | wui::window_style::switch_theme_button |
         wui::window_style::switch_lang_button | wui::window_style::border_all,
-        [this]()
-        {
-        });
+        [this]() { }); // init root window
+    if (!ret)
+        return false;
+    OnOK();
+    messageBox->event_loop();
+    window->show();
+    return ret;
+#else
+    return window->init(wui::locale("main_frame", "caption"), { -1, -1, width, height },
+        wui::window_style::frame | wui::window_style::switch_theme_button |
+        wui::window_style::switch_lang_button | wui::window_style::border_all,
+        [this]() { });
+#endif
 }
 
 void MainFrame::ReceiveEvents(const wui::event& ev)
@@ -132,22 +145,12 @@ void MainFrame::ReceiveEvents(const wui::event& ev)
                 window->add_control(okButton, { 0 });
 
                 window->set_default_push_control(okButton);
-                //UpdateControlsPosition();
                 break;
             case wui::internal_event_type::size_changed:
-                if (window->state() == wui::window_state::normal &&
-                    ev.internal_event_.x > 0 && ev.internal_event_.y > 0)
-                {
-                    wui::config::set_int("MainFrame", "Width", ev.internal_event_.x);
-                    wui::config::set_int("MainFrame", "Height", ev.internal_event_.y);
-                }
-                UpdateControlsPosition();
-                break;
             case wui::internal_event_type::window_expanded:
-            case wui::internal_event_type::window_normalized:
                 UpdateControlsPosition();
                 break;
-            case wui::internal_event_type::window_minimized:
+            case wui::internal_event_type::window_minimized: // iconic
                 break;
         }
     }
@@ -155,43 +158,43 @@ void MainFrame::ReceiveEvents(const wui::event& ev)
 
 constexpr int32_t _space = 30;
 
-// Смена языка меняет длину текста. Если текст заведомо внутри
+// Смена языка, темы может менять длину текста. Если текст заведомо внутри
 // заданной позиции, get_preferred_size() можно не использовать,
 // позиция может быть фиксированная, если не ожидается проблем с длинной и
 // шириной текста (изменение языка, размера шрифта).
-void MainFrame::UpdateButtonPosition()
+void MainFrame::UpdateButtonPosition(const int32_t button_h)
 {
     const auto width = window->position().width(), height = window->position().height();
     const int32_t center = width / 2;
     const wui::rect rc_button = okButton->get_preferred_size();
     okButton->set_position({ center - rc_button.width() / 2 + 10,
-         height - rc_button.height() - _space,
+         height - _space - rc_button.height(),
          center + rc_button.width() / 2 + 10,
          height - _space
         });
-
 }
 
 void MainFrame::UpdateControlsPosition()
 {
-    constexpr int32_t top = 40, element_height = 40;
+    constexpr int32_t img_height = 40;
     const auto width = window->position().width(), height = window->position().height();
+    const auto top = std::max(window->caption_height() + 4, _space);
 
-    // NB: изменение темы не меняет height шрифта
-    wui::rect rc_wt = whatsYourNameText->get_preferred_size();
-    wui::rect pos{ _space, top, width - _space, top + rc_wt.height() + 4 };
+    const wui::rect rc_t = whatsYourNameText->get_preferred_size();
+    wui::rect pos{ _space, top, width - _space, top + rc_t.height() };
     whatsYourNameText->set_position(pos);
 
-    wui::line_up_top_bottom(pos, element_height, _space);
+    const auto input_h = userNameInput->lines_max_height() + 4;
+    wui::line_up_top_bottom(pos, input_h, _space);
     userNameInput->set_position(pos);
-    wui::line_up_top_bottom(pos, element_height * 2, _space);
+    wui::line_up_top_bottom(pos, img_height * 2, _space);
 
     const int32_t center = width / 2;
 
-    pos.left = center - element_height, pos.right = center + element_height;
+    pos.left = center - img_height, pos.right = center + img_height;
 
     logoImage->set_position(pos);
-    UpdateButtonPosition();
+    UpdateButtonPosition(input_h);
 }
 
 void MainFrame::OnOK()
@@ -200,7 +203,7 @@ void MainFrame::OnOK()
     messageBox->set_docked(false);
     messageBox->show(
         wui::locale("main_frame", hello_again ? "hello_again_text" : "hello_text") +
-        userNameInput->text() + ". " + wui::locale("main_frame", "hello_text2"),
+        (userNameInput->text().empty() ? "%username%" : userNameInput->text()) + "! " + wui::locale("main_frame", "hello_text2"),
         wui::locale("main_frame", "ok_message_caption"), wui::message_icon::information,
         wui::message_button::ok, [this](wui::message_result)
         {
