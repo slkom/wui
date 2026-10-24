@@ -831,9 +831,7 @@ int main(int argc, char *argv[])
         }
     );
 
-    auto list1_item_size = 0;// list1->font_line_height();
-    //list1->set_item_height_callback([list1_item_size](int32_t , int32_t& h)
-    //    { h = list1_item_size + 2; });
+    auto list1_item_size = 0;
 
     auto editButton = std::make_shared<wui::button>("Edit",
         [&]()
@@ -1100,6 +1098,11 @@ int main(int argc, char *argv[])
                     vertSplitter->set_position({ pos.width(), cap_h, pos.width() + _splitter_width, h });
                 }
             }
+            else
+            {
+                const auto pos = vertSplitter->position();
+                vertSplitter->set_position({ pos.left, cap_h, pos.right, h });
+            }
 
             vertSplitter->set_margins(150, w - w/2);
 
@@ -1108,7 +1111,7 @@ int main(int argc, char *argv[])
             menu->set_position({});
             constexpr int32_t space = 20;
 
-            auto pos_splitter = vertSplitter->position();
+            const auto pos_splitter = vertSplitter->position();
             const int32_t left = pos_splitter.left + pos_splitter.width() + space;
 
             wui::rect pos = text0->position();
