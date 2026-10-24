@@ -95,12 +95,6 @@ bool graphic::resize(const int32_t width, const int32_t height, const bool clear
         cairo_surface_flush(screen_surface);
         cairo_xcb_surface_set_size(screen_surface, width, height);
     }
-    else
-    {
-#ifndef NDEBUG
-        assert(!screen_surface_use);
-#endif
-    }
 
     pc.release();
     if (surface)
@@ -198,7 +192,6 @@ bool graphic::init(const int32_t width, const int32_t height, const color backgr
                 err.set(error_type::no_handle, "graphic::init()", "Can't create the cairo screen surface");
                 return false;
             }
-            screen_surface_use = true;
         }
         else
         {
@@ -211,9 +204,6 @@ bool graphic::init(const int32_t width, const int32_t height, const color backgr
     }
     else
     {
-#ifndef NDEBUG
-        assert(!screen_surface_use);
-#endif
         if (screen_surface)
         {
             cairo_surface_destroy(screen_surface);
@@ -267,7 +257,6 @@ void graphic::release()
         dirty_region = nullptr;
     }
 
-    screen_surface_use = false;
     target_surface = nullptr;
     if (screen_surface)
     {

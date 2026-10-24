@@ -63,7 +63,6 @@ public:
     void set_target(const graphic& target_gr_) noexcept
     {
         target_surface = target_gr_.surface;
-screen_surface_use = false;
     }
 
     bool resize(const int32_t width, const int32_t height, const bool clear_ = true);
@@ -259,8 +258,6 @@ private:
     _cairo_surface* target_surface{ nullptr };
     _cairo_surface* surface{ nullptr };
     _cairo_region* dirty_region{ nullptr };
-
-bool screen_surface_use{ }; // TODO tmp
 #endif
 
     error err;
