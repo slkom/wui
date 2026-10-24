@@ -1242,6 +1242,13 @@ void graphic::draw_rect(const rect position, const color border_color,
 #endif
 }
 
+#ifdef __linux__
+int32_t graphic::get_format_argb32_stride(const int32_t width)
+{
+    return cairo_format_stride_for_width(CAIRO_FORMAT_ARGB32, width);
+}
+#endif
+
 void graphic::draw_buffer(const rect position, uint8_t *buffer,
     const int32_t left_shift, const int32_t top_shift, const int32_t stride_data)
 {
