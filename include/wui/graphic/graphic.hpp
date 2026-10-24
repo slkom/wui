@@ -179,6 +179,11 @@ screen_surface_use = false;
     void fill_path(const rect position, const point2i* pts, const int n, const color color_,
         const bool antialias_none = true);
 
+
+#ifdef __linux__
+    int32_t get_format_argb32_stride(const int32_t width);
+#endif
+
     /// draw some buffer on context, default stride_data meets the required
     void draw_buffer(const rect position, uint8_t *buffer, const int32_t left_shift,
         const int32_t top_shift, const int32_t stride_data = 0);
